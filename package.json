@@ -1,0 +1,62 @@
+{
+  "name": "secweb3",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "SecWeb3 - AI-Powered Smart Contract Security Auditor for Solidity, Vyper, Move, and Cairo contracts",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "vite",
+    "dev:backend": "nodemon server/index.js",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "start": "vite preview --host --port 4173",
+    "start:backend": "cd server && npm start",
+    "install:server": "cd server && npm install",
+    "railway:build": "cd server && npm install",
+    "railway:start": "cd server && npm start"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@monaco-editor/react": "^4.6.0",
+    "lucide-react": "^0.292.0",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.0",
+    "remark-gfm": "^4.0.0",
+    "classnames": "^2.3.2",
+    "react-syntax-highlighter": "^15.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "vite": "^5.0.8",
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/secweb3.git"
+  },
+  "keywords": [
+    "smart-contracts",
+    "security",
+    "blockchain",
+    "solidity",
+    "vyper",
+    "move",
+    "cairo",
+    "audit",
+    "ai"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
