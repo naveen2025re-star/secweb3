@@ -1,15 +1,13 @@
-import dotenv from 'dotenv';
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import multer from 'multer';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import crypto from 'crypto';
+const dotenv = require('dotenv');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const multer = require('multer');
+const path = require('path');
+const crypto = require('crypto');
 
-// Set up __dirname for ES modules FIRST
-const __filename = fileURLToPath(import.meta.url);
+// __dirname is available in CommonJS
 const __dirname = path.dirname(__filename);
 
 // Helper function to generate UUID using crypto
@@ -623,4 +621,4 @@ app.listen(PORT, () => {
   console.log(`⚡ Ready for contract analysis!`);
 });
 
-export default app;
+module.exports = app;
