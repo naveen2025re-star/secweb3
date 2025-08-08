@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react'
-import { Send, Paperclip, Plus, Mic } from 'lucide-react'
+import { Send, Paperclip, Mic, X, FileText } from 'lucide-react'
 
 const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
   const [message, setMessage] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const [filename, setFilename] = useState('')
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -13,6 +15,7 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
 
     onSendMessage(message.trim() || 'Analyze this smart contract for security vulnerabilities', code)
     setMessage('')
+    setFilename('')
     if (code) setCode('') // Clear code after sending
   }
 
@@ -23,15 +26,27 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
     }
   }
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        setCode(event.target.result)
-      }
-      reader.readAsText(file)
+  const readFile = (file) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setCode(event.target.result || '')
+      setFilename(file.name || '')
     }
+    reader.readAsText(file)
+  }
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (file) readFile(file)
+  }
+
+  const onDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) readFile(file)
   }
 
   const adjustTextareaHeight = () => {
@@ -46,32 +61,42 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
     adjustTextareaHeight()
   }, [message])
 
+  const charCount = message.length
+
   return (
-    <div className="border-t border-gray-600 bg-gray-800">
+    <div
+      className={`border-t border-gray-700 bg-gray-800 ${dragOver ? 'ring-2 ring-blue-500 ring-offset-0' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={onDrop}
+    >
       <div className="max-w-3xl mx-auto p-4">
         {/* Code Preview */}
-        {code && (
-          <div className="mb-3 p-3 bg-gray-700 rounded-lg border border-gray-600">
+        {(code || filename) && (
+          <div className="mb-3 p-3 bg-gray-700/80 rounded-lg border border-gray-600">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-300">Smart Contract Code Attached</span>
+              <span className="text-sm text-gray-300 inline-flex items-center">
+                <FileText className="w-4 h-4 mr-2" />
+                {filename ? filename : 'Smart Contract Code Attached'}
+              </span>
               <button
-                onClick={() => setCode('')}
+                onClick={() => { setCode(''); setFilename('') }}
                 className="text-gray-400 hover:text-white transition-colors"
+                aria-label="Remove attached code"
+                title="Remove attached code"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="text-xs text-gray-400 font-mono bg-gray-900 p-2 rounded border border-gray-600 max-h-16 overflow-y-auto">
-              {code.substring(0, 150)}
-              {code.length > 150 && '...'}
+            <div className="text-xs text-gray-300 font-mono bg-gray-900 p-2 rounded border border-gray-600 max-h-24 overflow-y-auto">
+              {code.substring(0, 300)}
+              {code.length > 300 && '...'}
             </div>
           </div>
         )}
 
         {/* Main Input */}
-        <div className="relative">
+        <form onSubmit={handleSubmit} className="relative">
           <div className="flex items-end space-x-3 bg-gray-700 rounded-xl border border-gray-600 p-3">
             {/* Attachment Button */}
             <button
@@ -79,6 +104,8 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
               onClick={() => fileInputRef.current?.click()}
               disabled={isAnalyzing}
               className="flex-shrink-0 p-2 text-gray-400 hover:text-white disabled:opacity-50 transition-colors rounded-lg hover:bg-gray-600"
+              title="Attach smart contract file (.sol, .vy, .move, .cairo)"
+              aria-label="Attach file"
             >
               <Paperclip className="w-4 h-4" />
             </button>
@@ -98,24 +125,38 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Message SecWeb3..."
+                placeholder="Message SecWeb3... (Shift+Enter for newline)"
                 disabled={isAnalyzing}
                 className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none disabled:opacity-50"
                 style={{ minHeight: '24px', maxHeight: '200px' }}
                 rows="1"
+                aria-label="Message input"
               />
             </div>
 
-            {/* Send Button */}
-            {(message.trim() || code) && !isAnalyzing && (
+            {/* Clear text button */}
+            {message && !isAnalyzing && (
               <button
                 type="button"
-                onClick={handleSubmit}
-                className="flex-shrink-0 p-2 bg-white text-gray-800 rounded-lg hover:bg-gray-200 transition-all"
+                onClick={() => setMessage('')}
+                className="flex-shrink-0 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-600 transition-colors"
+                aria-label="Clear message"
+                title="Clear message"
               >
-                <Send className="w-4 h-4" />
+                <X className="w-4 h-4" />
               </button>
             )}
+
+            {/* Send Button */}
+            <button
+              type="submit"
+              disabled={(!message.trim() && !code) || isAnalyzing}
+              className="flex-shrink-0 p-2 bg-white text-gray-800 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              aria-label="Send"
+              title="Send message"
+            >
+              <Send className="w-4 h-4" />
+            </button>
 
             {/* Loading indicator */}
             {isAnalyzing && (
@@ -124,17 +165,25 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
               </div>
             )}
 
-            {/* Mic Button (when no text) */}
+            {/* Mic Button (when idle) */}
             {!message.trim() && !code && !isAnalyzing && (
               <button
                 type="button"
                 className="flex-shrink-0 p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-600"
+                aria-label="Voice input (coming soon)"
+                title="Voice input (coming soon)"
               >
                 <Mic className="w-4 h-4" />
               </button>
             )}
           </div>
-        </div>
+
+          {/* Helper row */}
+          <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+            <span>Shift+Enter for newline • Drag & drop a .sol/.vy/.move/.cairo file to attach</span>
+            <span>{charCount.toLocaleString()} chars</span>
+          </div>
+        </form>
 
         {/* Footer text */}
         <div className="text-center mt-3">

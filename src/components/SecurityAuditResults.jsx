@@ -1,17 +1,22 @@
-import React, { useState } from 'react'
-import { AlertTriangle, Shield, Info, CheckCircle, FileText, Code, ExternalLink } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
+import { AlertTriangle, Shield, Info, CheckCircle, FileText, Code, ExternalLink, SlidersHorizontal } from 'lucide-react'
 
 const SecurityAuditResults = ({ content }) => {
   const [expandedIssues, setExpandedIssues] = useState(new Set())
+  const [severityFilter, setSeverityFilter] = useState('All')
 
   const toggleIssue = (issueId) => {
-    const newExpanded = new Set(expandedIssues)
-    if (newExpanded.has(issueId)) {
-      newExpanded.delete(issueId)
-    } else {
-      newExpanded.add(issueId)
-    }
-    setExpandedIssues(newExpanded)
+    const next = new Set(expandedIssues)
+    next.has(issueId) ? next.delete(issueId) : next.add(issueId)
+    setExpandedIssues(next)
+  }
+
+  const expandAll = (issues) => {
+    setExpandedIssues(new Set(issues.map(i => i.id)))
+  }
+
+  const collapseAll = () => {
+    setExpandedIssues(new Set())
   }
 
   // Parse the content to extract structured vulnerability information
@@ -55,58 +60,58 @@ const SecurityAuditResults = ({ content }) => {
     return vulnerabilities
   }
 
-  const vulnerabilities = parseVulnerabilities(content)
+  const vulnerabilities = useMemo(() => parseVulnerabilities(content), [content])
 
   const getSeverityIcon = (severity) => {
     switch (severity.toLowerCase()) {
       case 'critical':
-        return <AlertTriangle className="w-5 h-5 text-red-600" />
+        return <AlertTriangle className="w-5 h-5 text-red-500" />
       case 'high':
-        return <AlertTriangle className="w-5 h-5 text-orange-600" />
+        return <AlertTriangle className="w-5 h-5 text-orange-500" />
       case 'medium':
-        return <Info className="w-5 h-5 text-yellow-600" />
+        return <Info className="w-5 h-5 text-yellow-500" />
       case 'low':
-        return <Info className="w-5 h-5 text-blue-600" />
+        return <Info className="w-5 h-5 text-blue-500" />
       default:
-        return <Shield className="w-5 h-5 text-gray-600" />
+        return <Shield className="w-5 h-5 text-gray-500" />
     }
   }
 
   const getSeverityColor = (severity) => {
     switch (severity.toLowerCase()) {
       case 'critical':
-        return 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
+        return 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800'
       case 'high':
-        return 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800'
+        return 'bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800'
       case 'medium':
-        return 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/10 dark:border-yellow-800'
+        return 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800'
       case 'low':
-        return 'bg-blue-50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800'
+        return 'bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800'
       default:
-        return 'bg-gray-50 border-gray-200 dark:bg-gray-900/10 dark:border-gray-800'
+        return 'bg-gray-50 border-gray-200 dark:bg-gray-900/20 dark:border-gray-800'
     }
   }
 
   const getSeverityBadgeColor = (severity) => {
     switch (severity.toLowerCase()) {
       case 'critical':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+        return 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200'
       case 'high':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-200'
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/60 dark:text-yellow-200'
       case 'low':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200'
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/60 dark:text-gray-200'
     }
   }
 
   if (vulnerabilities.length === 0) {
     return (
-      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
+      <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-xl p-6 shadow-sm">
         <div className="flex items-center space-x-3">
-          <CheckCircle className="w-6 h-6 text-green-600" />
+          <CheckCircle className="w-6 h-6 text-green-500" />
           <div>
             <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">
               Security Analysis Complete
@@ -120,38 +125,77 @@ const SecurityAuditResults = ({ content }) => {
     )
   }
 
+  const filteredVulnerabilities = useMemo(() => {
+    if (severityFilter === 'All') return vulnerabilities
+    return vulnerabilities.filter(v => v.severity === severityFilter)
+  }, [severityFilter, vulnerabilities])
+
   return (
     <div className="space-y-4">
       {/* Security Summary Header */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <Shield className="w-6 h-6 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Security Audit Results
-          </h2>
+      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Shield className="w-6 h-6 text-blue-500" />
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Security Audit Results
+            </h2>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => expandAll(filteredVulnerabilities)}
+              className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            >
+              Expand all
+            </button>
+            <button
+              onClick={collapseAll}
+              className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            >
+              Collapse all
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {['Critical', 'High', 'Medium', 'Low'].map(severity => {
-            const count = vulnerabilities.filter(v => v.severity === severity).length
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center text-xs text-gray-500 dark:text-gray-400">
+            <SlidersHorizontal className="w-4 h-4 mr-2" />
+            Filter by severity:
+          </div>
+          {['All', 'Critical', 'High', 'Medium', 'Low'].map(severity => {
+            const count = severity === 'All'
+              ? vulnerabilities.length
+              : vulnerabilities.filter(v => v.severity === severity).length
+
+            const active = severityFilter === severity
             return (
-              <div key={severity} className="text-center">
-                <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getSeverityBadgeColor(severity)}`}>
-                  {getSeverityIcon(severity)}
-                  <span className="ml-2">{count}</span>
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{severity}</div>
-              </div>
+              <button
+                key={severity}
+                onClick={() => setSeverityFilter(severity)}
+                className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium border transition
+                  ${active
+                    ? 'bg-blue-600 text-white border-blue-600 shadow'
+                    : 'bg-white/40 dark:bg-gray-900/40 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                aria-pressed={active}
+              >
+                {severity !== 'All' && getSeverityIcon(severity)}
+                <span className={`${severity !== 'All' ? 'ml-2' : ''}`}>{severity}</span>
+                <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold ${getSeverityBadgeColor(severity === 'All' ? 'low' : severity)}`}>
+                  {count}
+                </span>
+              </button>
             )
           })}
         </div>
       </div>
 
       {/* Vulnerability Issues */}
-      {vulnerabilities.map((vulnerability, index) => (
+      {filteredVulnerabilities.map((vulnerability, index) => (
         <div
           key={vulnerability.id}
-          className={`border rounded-lg transition-all duration-200 ${getSeverityColor(vulnerability.severity)}`}
+          className={`border rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ${getSeverityColor(vulnerability.severity)}`}
         >
           {/* Issue Header */}
           <div
@@ -165,7 +209,7 @@ const SecurityAuditResults = ({ content }) => {
                   <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
                     Issue #{index + 1}: {vulnerability.title}
                   </h3>
-                  <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-600 dark:text-gray-400">
                     <span className="flex items-center space-x-1">
                       <span className="font-medium">Severity:</span>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSeverityBadgeColor(vulnerability.severity)}`}>
@@ -184,11 +228,9 @@ const SecurityAuditResults = ({ content }) => {
                   </div>
                 </div>
               </div>
-              <button className="ml-4 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+              <button className="ml-4 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" aria-label="Toggle details">
                 <svg
-                  className={`w-4 h-4 text-gray-500 transition-transform ${
-                    expandedIssues.has(vulnerability.id) ? 'rotate-180' : ''
-                  }`}
+                  className={`w-4 h-4 text-gray-500 transition-transform ${expandedIssues.has(vulnerability.id) ? 'rotate-180' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -201,7 +243,7 @@ const SecurityAuditResults = ({ content }) => {
 
           {/* Expanded Issue Details */}
           {expandedIssues.has(vulnerability.id) && (
-            <div className="border-t border-gray-200 dark:border-gray-600 p-4 bg-white/50 dark:bg-gray-800/50">
+            <div className="border-t border-gray-200 dark:border-gray-600 p-4 bg-white/60 dark:bg-gray-800/60">
               <div className="space-y-4">
                 {/* Vulnerable Code Snippet */}
                 <div>

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useMemo } from 'react'
-import { Copy } from 'lucide-react'
+import React, { useEffect, useRef, useMemo, useState } from 'react'
+import { Copy, Check } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -9,6 +9,7 @@ import SecurityAuditResults from './SecurityAuditResults'
 
 const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
   const messagesEndRef = useRef(null)
+  const [copiedMessageId, setCopiedMessageId] = useState(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -41,6 +42,16 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
     const lowerContent = content.toLowerCase()
     return securityKeywords.some(keyword => lowerContent.includes(keyword)) && 
            (lowerContent.includes('critical') || lowerContent.includes('vulnerability') || lowerContent.includes('security'))
+  }
+
+  const handleCopy = async (id, text) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedMessageId(id)
+      setTimeout(() => setCopiedMessageId(null), 1200)
+    } catch (e) {
+      // No-op: clipboard may be blocked
+    }
   }
 
   // Optimized markdown renderer
@@ -137,7 +148,9 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
 
         {streaming && (
           <div className="flex items-center space-x-1 mt-2">
-            <div className="w-1 h-4 bg-white animate-pulse"></div>
+            <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '120ms' }}></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '240ms' }}></span>
           </div>
         )}
       </div>
@@ -160,7 +173,7 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
             </div>
           )}
 
-          {messages.map((message, index) => (
+          {messages.map((message) => (
             <div key={message.id} className={`group px-4 ${message.type === 'user' ? 'bg-gray-800' : 'bg-gray-700'}`}>
               <div className="max-w-3xl mx-auto py-6">
                 <div className="flex space-x-4">
@@ -196,8 +209,17 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
                             streaming={message.streaming} 
                           />
                           {/* Copy button */}
-                          <button className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Copy className="w-4 h-4" />
+                          <button
+                            className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title={copiedMessageId === message.id ? 'Copied' : 'Copy'}
+                            aria-label="Copy response"
+                            onClick={() => handleCopy(message.id, message.content)}
+                          >
+                            {copiedMessageId === message.id ? (
+                              <Check className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
                           </button>
                         </div>
                       )}
@@ -226,8 +248,10 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
                           streaming={true} 
                         />
                       ) : (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-1 h-4 bg-white animate-pulse"></div>
+                        <div className="flex items-center space-x-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '120ms' }}></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '240ms' }}></span>
                         </div>
                       )}
                     </div>

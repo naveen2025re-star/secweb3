@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
-import { Plus, MessageSquare, MoreHorizontal, Edit3, Archive, Trash2 } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
+import { Plus, MessageSquare, MoreHorizontal, Edit3, Trash2, Search } from 'lucide-react'
 
 const Sidebar = ({ conversations, activeConversation, onNewConversation, onSelectConversation }) => {
   const [hoveredConversation, setHoveredConversation] = useState(null)
+  const [query, setQuery] = useState('')
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp)
@@ -20,16 +21,22 @@ const Sidebar = ({ conversations, activeConversation, onNewConversation, onSelec
     return title.substring(0, maxLength) + '...'
   }
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return conversations
+    return conversations.filter(c => c.title.toLowerCase().includes(q))
+  }, [conversations, query])
+
   const groupedConversations = {
-    'Today': conversations.filter(conv => {
+    'Today': filtered.filter(conv => {
       const diffInDays = Math.floor((new Date() - new Date(conv.timestamp)) / (1000 * 60 * 60 * 24))
       return diffInDays === 0
     }),
-    'Yesterday': conversations.filter(conv => {
+    'Yesterday': filtered.filter(conv => {
       const diffInDays = Math.floor((new Date() - new Date(conv.timestamp)) / (1000 * 60 * 60 * 24))
       return diffInDays === 1
     }),
-    'Previous 7 days': conversations.filter(conv => {
+    'Previous 7 days': filtered.filter(conv => {
       const diffInDays = Math.floor((new Date() - new Date(conv.timestamp)) / (1000 * 60 * 60 * 24))
       return diffInDays > 1 && diffInDays <= 7
     }),
@@ -38,7 +45,7 @@ const Sidebar = ({ conversations, activeConversation, onNewConversation, onSelec
   return (
     <div className="w-64 h-full bg-gray-900 text-white flex flex-col">
       {/* New Chat Button */}
-      <div className="p-3">
+      <div className="p-3 space-y-2">
         <button
           onClick={onNewConversation}
           className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-sm"
@@ -46,6 +53,19 @@ const Sidebar = ({ conversations, activeConversation, onNewConversation, onSelec
           <Plus className="w-4 h-4" />
           <span>New chat</span>
         </button>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            aria-label="Search conversations"
+          />
+        </div>
       </div>
 
       {/* Conversations */}
@@ -76,6 +96,7 @@ const Sidebar = ({ conversations, activeConversation, onNewConversation, onSelec
                       <span className="flex-1 min-w-0 text-sm truncate">
                         {truncateTitle(conversation.title)}
                       </span>
+                      <span className="text-[10px] text-gray-500">{formatTime(conversation.timestamp)}</span>
                     </button>
 
                     {/* Hover actions */}
