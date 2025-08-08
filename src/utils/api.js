@@ -117,6 +117,9 @@ export const uploadContractFile = async (file) => {
 
     const response = await fetch(`${API_BASE_URL}/api/upload`, {
       method: 'POST',
+      headers: {
+        ...getAuthHeaders()
+      },
       body: formData
     })
 
@@ -141,7 +144,11 @@ export const uploadContractFile = async (file) => {
 // Get supported languages
 export const getSupportedLanguages = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/languages`)
+    const response = await fetch(`${API_BASE_URL}/api/languages`, {
+      headers: {
+        ...getAuthHeaders()
+      }
+    })
 
     if (!response.ok) {
       throw new Error(`Failed to fetch languages: ${response.status}`)

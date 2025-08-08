@@ -15,7 +15,7 @@ import createTables from './migrations/001_create_tables.js';
 
 // __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__dirname);
+const __dirname = path.dirname(__filename);
 
 // Helper function to generate UUID using crypto
 const generateUUID = () => crypto.randomUUID();
@@ -166,12 +166,8 @@ const initializeDatabase = async () => {
 // Initialize database when server starts
 initializeDatabase();
 
-// Import conversations routes
-import conversationsRoutes from './routes/conversations.js';
-
 // Add Web3 authentication routes
 app.use('/api/auth', web3AuthRoutes);
-app.use('/api/conversations', conversationsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

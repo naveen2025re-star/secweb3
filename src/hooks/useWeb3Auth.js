@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://secweb3-production.up.railway.app' : 'http://localhost:8000');
 
 export const useWeb3Auth = () => {
   const [isConnected, setIsConnected] = useState(false);
