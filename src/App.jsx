@@ -1,35 +1,43 @@
 import React, { useState, useEffect } from 'react'
+import { useWeb3Auth } from './hooks/useWeb3Auth'
+import Web3Auth from './components/Web3Auth'
 import { checkBackendHealth, analyzeContract, streamAnalysis } from './utils/api'
 import Sidebar from './components/Sidebar'
 import ChatInterface from './components/ChatInterface'
 import ChatInput from './components/ChatInput'
 
 function App() {
+  const { user, token, isConnected } = useWeb3Auth()
+
+  // Show Web3Auth if not authenticated
+  if (!user || !token) {
+    return <Web3Auth onAuthSuccess={(userData) => {
+      console.log('User authenticated:', userData)
+      // App will re-render automatically due to useWeb3Auth hook
+    }} />
+  }
+
   const [code, setCode] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [messages, setMessages] = useState([])
   const [streamingMessage, setStreamingMessage] = useState('')
   const [backendHealth, setBackendHealth] = useState({ healthy: false, checking: true })
 
-  // Conversation management
+  // Conversation management with user context
   const [conversations, setConversations] = useState([
     {
       id: '1',
-      title: 'SecWeb3 Security Analysis',
+      title: 'Welcome to SecWeb3',
       timestamp: Date.now() - 3600000,
-      messages: []
+      messages: [],
+      userId: user?.id
     },
     {
       id: '2',
-      title: 'ERC20 Token Vulnerability Scan',
+      title: 'Smart Contract Analysis',
       timestamp: Date.now() - 7200000,
-      messages: []
-    },
-    {
-      id: '3',
-      title: 'DeFi Protocol Security Audit',
-      timestamp: Date.now() - 86400000,
-      messages: []
+      messages: [],
+      userId: user?.id
     }
   ])
   const [activeConversation, setActiveConversation] = useState('1')
@@ -216,6 +224,7 @@ function App() {
     <div className="h-screen flex bg-gray-800">
       {/* Sidebar */}
       <Sidebar
+        user={user}
         conversations={conversations}
         activeConversation={activeConversation}
         onNewConversation={handleNewConversation}

@@ -8,9 +8,14 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
+// Import new Web3 auth and database modules
+import { testConnection } from './database.js';
+import web3AuthRoutes from './routes/web3Auth.js';
+import createTables from './migrations/001_create_tables.js';
+
 // __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(__dirname);
 
 // Helper function to generate UUID using crypto
 const generateUUID = () => crypto.randomUUID();
@@ -139,12 +144,46 @@ const validateContractCode = (code) => {
 
 // API Routes
 
+// Initialize database on startup
+const initializeDatabase = async () => {
+  try {
+    console.log('🔄 Initializing database connection...');
+    const isConnected = await testConnection();
+
+    if (isConnected) {
+      console.log('🔄 Running database migrations...');
+      await createTables();
+      console.log('✅ Database initialized successfully');
+    } else {
+      console.log('⚠️ Database connection failed, running without database features');
+    }
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error);
+    console.log('⚠️ Continuing without database features');
+  }
+};
+
+// Initialize database when server starts
+initializeDatabase();
+
+// Import conversations routes
+import conversationsRoutes from './routes/conversations.js';
+
+// Add Web3 authentication routes
+app.use('/api/auth', web3AuthRoutes);
+app.use('/api/conversations', conversationsRoutes);
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '2.0.0',
+    features: {
+      web3Auth: true,
+      database: true,
+      shipableIntegration: true
+    }
   });
 });
 

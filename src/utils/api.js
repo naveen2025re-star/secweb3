@@ -1,6 +1,18 @@
-// Shipable API configuration
+// API configuration
 const SHIPABLE_API_BASE = 'https://api.shipable.ai/v2'
 const SHIPABLE_JWT_TOKEN = import.meta.env.VITE_SHIPABLE_JWT_TOKEN
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+// Get auth token from localStorage
+const getAuthToken = () => {
+  return localStorage.getItem('secweb3_token')
+}
+
+// Create authenticated headers
+const getAuthHeaders = () => {
+  const token = getAuthToken()
+  return token ? { 'Authorization': `Bearer ${token}` } : {}
+}
 
 // Main contract analysis function - directly calls Shipable API
 export const analyzeContract = async (code, filename = null) => {
@@ -154,7 +166,11 @@ export const getSupportedLanguages = async () => {
 // Health check function
 export const checkBackendHealth = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/health`)
+    const response = await fetch(`${API_BASE_URL}/api/health`, {
+      headers: {
+        ...getAuthHeaders()
+      }
+    })
 
     if (!response.ok) {
       return { healthy: false, error: `Server returned ${response.status}` }
@@ -164,6 +180,73 @@ export const checkBackendHealth = async () => {
     return { healthy: data.status === 'healthy', data }
   } catch (error) {
     return { healthy: false, error: error.message }
+  }
+}
+
+// User profile functions
+export const getUserProfile = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get user profile: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to get user profile:', error)
+    throw error
+  }
+}
+
+// Save conversation
+export const saveConversation = async (conversation) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify(conversation)
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to save conversation: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to save conversation:', error)
+    // Don't throw error to avoid breaking the app
+    return { success: false, error: error.message }
+  }
+}
+
+// Get user conversations
+export const getUserConversations = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get conversations: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to get conversations:', error)
+    // Return empty array to avoid breaking the app
+    return { success: false, conversations: [] }
   }
 }
 

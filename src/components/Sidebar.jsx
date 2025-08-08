@@ -142,6 +142,40 @@ const Sidebar = ({ conversations, activeConversation, onNewConversation, onSelec
         </div>
       </div>
     </div>
+
+      {/* User Profile Section */}
+      {user && (
+        <div className="p-4 border-b border-gray-700 bg-gray-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center">
+                <Wallet className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-white truncate">
+                  {user.ensName || formatAddress(user.walletAddress)}
+                </p>
+                <div className="flex items-center space-x-2">
+                  <p className="text-xs text-gray-400">
+                    {user.subscriptionTier || 'Free'}
+                  </p>
+                  <span className="text-gray-500">•</span>
+                  <p className="text-xs text-gray-400">
+                    {user.apiCallsCount || 0}/{user.apiCallsLimit || 100} calls
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
   )
 }
 
