@@ -651,5 +651,3 @@ app.listen(PORT, () => {
   console.log(`📊 Rate Limiting: Disabled`);
   console.log(`⚡ Ready for contract analysis!`);
 });
-
-module.exports = app;
