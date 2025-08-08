@@ -55,19 +55,33 @@ export const streamAnalysis = async (sessionKey, message, code) => {
   try {
     console.log('🔄 Starting Shipable streaming analysis...')
 
+    // Prepare the request data in the format expected by Shipable API
+    const requestData = {
+      sessionKey: sessionKey,
+      messages: [
+        {
+          role: "user",
+          content: code ? `${message}\n\nContract Code:\n${code}` : message
+        }
+      ],
+      token: SHIPABLE_JWT_TOKEN,
+      stream: true
+    }
+
+    // Create multipart form data
+    const formData = new FormData()
+    formData.append('request', JSON.stringify(requestData))
+
+    console.log('🔄 Sending request data:', requestData)
+
     const response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
         'Cache-Control': 'no-cache'
+        // Note: Don't set Content-Type for FormData - browser will set it automatically with boundary
       },
-      body: JSON.stringify({
-        sessionKey: sessionKey,
-        message: message,
-        contractCode: code || undefined
-      })
+      body: formData
     })
 
     if (!response.ok) {
