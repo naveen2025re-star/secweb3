@@ -43,27 +43,38 @@ const Sidebar = ({ conversations, activeConversation, onNewConversation, onSelec
   }
 
   return (
-    <div className="w-64 h-full bg-gray-900 text-white flex flex-col">
-      {/* New Chat Button */}
-      <div className="p-3 space-y-2">
+    <div className="w-72 h-full bg-gray-950/95 backdrop-blur-sm text-white flex flex-col border-r border-gray-800/50">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-800/50">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+            <span className="text-sm font-bold text-white">S</span>
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">SecWeb3</h2>
+            <p className="text-xs text-gray-400">Smart Contract Auditor</p>
+          </div>
+        </div>
+
         <button
           onClick={onNewConversation}
-          className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 border border-gray-600 hover:bg-gray-800 rounded-lg transition-colors text-sm"
+          className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-xl transition-all text-sm font-medium shadow-lg hover:shadow-xl"
         >
           <Plus className="w-4 h-4" />
-          <span>New chat</span>
+          <span>New Analysis</span>
         </button>
+      </div>
 
-        {/* Search */}
+      {/* Search */}
+      <div className="p-4">
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search"
-            className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            aria-label="Search conversations"
+            placeholder="Search conversations..."
+            className="w-full pl-9 pr-3 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
           />
         </div>
       </div>

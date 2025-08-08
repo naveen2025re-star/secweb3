@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { Send, Paperclip, Mic, X, FileText } from 'lucide-react'
+import { Send, Paperclip, Mic, X, FileText, AlertCircle } from 'lucide-react'
 
 const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
   const [message, setMessage] = useState('')
@@ -16,7 +16,7 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
     onSendMessage(message.trim() || 'Analyze this smart contract for security vulnerabilities', code)
     setMessage('')
     setFilename('')
-    if (code) setCode('') // Clear code after sending
+    if (code) setCode('')
   }
 
   const handleKeyDown = (e) => {
@@ -53,7 +53,7 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
     const textarea = textareaRef.current
     if (textarea) {
       textarea.style.height = 'auto'
-      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px'
+      textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px'
     }
   }
 
@@ -62,134 +62,163 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
   }, [message])
 
   const charCount = message.length
+  const canSend = (message.trim() || code) && !isAnalyzing
 
   return (
-    <div
-      className={`border-t border-gray-700 bg-gray-800 ${dragOver ? 'ring-2 ring-blue-500 ring-offset-0' : ''}`}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={onDrop}
-    >
-      <div className="max-w-3xl mx-auto p-4">
+    <div className="bg-gray-900/95 backdrop-blur-sm border-t border-gray-700/50">
+      <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Code Preview */}
         {(code || filename) && (
-          <div className="mb-3 p-3 bg-gray-700/80 rounded-lg border border-gray-600">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-300 inline-flex items-center">
-                <FileText className="w-4 h-4 mr-2" />
-                {filename ? filename : 'Smart Contract Code Attached'}
-              </span>
+          <div className="mb-4 bg-gradient-to-r from-blue-950/30 to-purple-950/30 border border-blue-800/30 rounded-xl p-4 backdrop-blur-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-blue-600/20 rounded-lg flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-white">
+                    {filename || 'Smart Contract Attached'}
+                  </span>
+                  <div className="text-xs text-gray-400">{code.length.toLocaleString()} characters</div>
+                </div>
+              </div>
               <button
                 onClick={() => { setCode(''); setFilename('') }}
-                className="text-gray-400 hover:text-white transition-colors"
-                aria-label="Remove attached code"
-                title="Remove attached code"
+                className="w-8 h-8 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                aria-label="Remove file"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="text-xs text-gray-300 font-mono bg-gray-900 p-2 rounded border border-gray-600 max-h-24 overflow-y-auto">
-              {code.substring(0, 300)}
-              {code.length > 300 && '...'}
+            <div className="bg-gray-900/50 rounded-lg p-3 max-h-32 overflow-y-auto">
+              <pre className="text-xs text-gray-300 font-mono leading-relaxed">
+                {code.substring(0, 400)}
+                {code.length > 400 && '\n...'}
+              </pre>
             </div>
           </div>
         )}
 
-        {/* Main Input */}
-        <form onSubmit={handleSubmit} className="relative">
-          <div className="flex items-end space-x-3 bg-gray-700 rounded-xl border border-gray-600 p-3">
-            {/* Attachment Button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isAnalyzing}
-              className="flex-shrink-0 p-2 text-gray-400 hover:text-white disabled:opacity-50 transition-colors rounded-lg hover:bg-gray-600"
-              title="Attach smart contract file (.sol, .vy, .move, .cairo)"
-              aria-label="Attach file"
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
+        {/* Main Input Container */}
+        <div
+          className={`relative transition-all duration-200 ${
+            dragOver 
+              ? 'ring-2 ring-blue-400/50 ring-offset-0 ring-offset-gray-900' 
+              : ''
+          }`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+        >
+          <form onSubmit={handleSubmit} className="relative">
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl shadow-xl">
+              <div className="flex items-end p-4 gap-3">
+                {/* Attachment Button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isAnalyzing}
+                  className="flex-shrink-0 w-10 h-10 bg-gray-700/50 hover:bg-gray-600/50 disabled:opacity-50 rounded-xl flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                  title="Attach contract file"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".sol,.vy,.cairo,.move,.txt"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".sol,.vy,.cairo,.move,.txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
 
-            {/* Text Input */}
-            <div className="flex-1">
-              <textarea
-                ref={textareaRef}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Message SecWeb3... (Shift+Enter for newline)"
-                disabled={isAnalyzing}
-                className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none disabled:opacity-50"
-                style={{ minHeight: '24px', maxHeight: '200px' }}
-                rows="1"
-                aria-label="Message input"
-              />
-            </div>
+                {/* Text Input */}
+                <div className="flex-1 min-h-0">
+                  <textarea
+                    ref={textareaRef}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Message SecWeb3..."
+                    disabled={isAnalyzing}
+                    className="w-full bg-transparent text-white placeholder-gray-500 resize-none border-0 focus:outline-none disabled:opacity-50 text-[15px] leading-6"
+                    style={{ minHeight: '24px', maxHeight: '160px' }}
+                    rows="1"
+                  />
+                </div>
 
-            {/* Clear text button */}
-            {message && !isAnalyzing && (
-              <button
-                type="button"
-                onClick={() => setMessage('')}
-                className="flex-shrink-0 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-600 transition-colors"
-                aria-label="Clear message"
-                title="Clear message"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2">
+                  {message && !isAnalyzing && (
+                    <button
+                      type="button"
+                      onClick={() => setMessage('')}
+                      className="w-8 h-8 rounded-lg bg-gray-700/50 hover:bg-gray-600/50 flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                      title="Clear"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
 
-            {/* Send Button */}
-            <button
-              type="submit"
-              disabled={(!message.trim() && !code) || isAnalyzing}
-              className="flex-shrink-0 p-2 bg-white text-gray-800 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              aria-label="Send"
-              title="Send message"
-            >
-              <Send className="w-4 h-4" />
-            </button>
+                  {!message.trim() && !code && !isAnalyzing && (
+                    <button
+                      type="button"
+                      className="w-10 h-10 bg-gray-700/50 hover:bg-gray-600/50 rounded-xl flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                      title="Voice input (coming soon)"
+                    >
+                      <Mic className="w-4 h-4" />
+                    </button>
+                  )}
 
-            {/* Loading indicator */}
-            {isAnalyzing && (
-              <div className="flex-shrink-0 p-2">
-                <div className="w-4 h-4 border-2 border-gray-400 border-t-white rounded-full animate-spin" />
+                  {/* Send Button */}
+                  <button
+                    type="submit"
+                    disabled={!canSend}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                      canSend
+                        ? 'bg-white hover:bg-gray-100 text-gray-900 shadow-lg hover:shadow-xl'
+                        : 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+                    }`}
+                    title="Send message"
+                  >
+                    {isAnalyzing ? (
+                      <div className="w-4 h-4 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
-            )}
 
-            {/* Mic Button (when idle) */}
-            {!message.trim() && !code && !isAnalyzing && (
-              <button
-                type="button"
-                className="flex-shrink-0 p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-600"
-                aria-label="Voice input (coming soon)"
-                title="Voice input (coming soon)"
-              >
-                <Mic className="w-4 h-4" />
-              </button>
-            )}
+              {/* Bottom Info Bar */}
+              <div className="flex items-center justify-between px-4 pb-3 text-xs">
+                <div className="flex items-center space-x-3 text-gray-500">
+                  <span>⌘↵ to send</span>
+                  <span>•</span>
+                  <span>Drag & drop files</span>
+                </div>
+                <span className="text-gray-500">{charCount}/4000</span>
+              </div>
+            </div>
+          </form>
+
+          {/* Drag Overlay */}
+          {dragOver && (
+            <div className="absolute inset-0 bg-blue-500/10 border-2 border-dashed border-blue-400 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+              <div className="text-center">
+                <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                <p className="text-sm text-blue-300 font-medium">Drop your smart contract file here</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-center mt-4 text-center">
+          <div className="flex items-center space-x-2 text-xs text-gray-500">
+            <AlertCircle className="w-3 h-3" />
+            <span>SecWeb3 can make mistakes. Always verify security findings.</span>
           </div>
-
-          {/* Helper row */}
-          <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-            <span>Shift+Enter for newline • Drag & drop a .sol/.vy/.move/.cairo file to attach</span>
-            <span>{charCount.toLocaleString()} chars</span>
-          </div>
-        </form>
-
-        {/* Footer text */}
-        <div className="text-center mt-3">
-          <p className="text-xs text-gray-500">
-            SecWeb3 can make mistakes. Always verify security findings.
-          </p>
         </div>
       </div>
     </div>
