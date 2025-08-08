@@ -1,13 +1,15 @@
-const dotenv = require('dotenv');
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const multer = require('multer');
-const path = require('path');
-const crypto = require('crypto');
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import multer from 'multer';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 
-// __dirname is available in CommonJS
+// __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Helper function to generate UUID using crypto
@@ -49,7 +51,15 @@ const sessions = new Map();
 
 // Log initialization status (masking token for security)
 console.log('🔍 SHIPABLE_JWT_TOKEN found:', !!SHIPABLE_JWT_TOKEN);
-console.log(`🔑 Shipable JWT Token: ${SHIPABLE_JWT_TOKEN.substring(0, 20)}...`);
+if (SHIPABLE_JWT_TOKEN) {
+  if (SHIPABLE_JWT_TOKEN) {
+    console.log(`🔑 Shipable JWT Token: ${SHIPABLE_JWT_TOKEN ? SHIPABLE_JWT_TOKEN.substring(0, 20) + '...' : 'NOT_SET'}`);
+  } else {
+    console.log('🔑 Shipable JWT Token: Not provided');
+  }
+} else {
+  console.log('🔑 Shipable JWT Token: Not provided');
+}
 console.log(`🌐 Shipable API: ${SHIPABLE_API_BASE}`);
 
 // No custom system prompt - using Shipable AI's built-in smart contract auditor prompt
