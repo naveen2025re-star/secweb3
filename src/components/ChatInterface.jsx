@@ -5,7 +5,6 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import SecurityAuditResults from './SecurityAuditResults'
 
 const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
   const messagesEndRef = useRef(null)
@@ -36,14 +35,6 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
     }
   }, [streamingMessage, debouncedScroll])
 
-  // Check if content looks like a security audit response
-  const isSecurityAudit = (content) => {
-    const securityKeywords = ['vulnerability', 'security', 'critical', 'high', 'medium', 'low', 'audit', 'exploit', 'risk']
-    const lowerContent = content.toLowerCase()
-    return securityKeywords.some(keyword => lowerContent.includes(keyword)) && 
-           (lowerContent.includes('critical') || lowerContent.includes('vulnerability') || lowerContent.includes('security'))
-  }
-
   const handleCopy = async (id, text) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -54,37 +45,38 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
     }
   }
 
-  // Optimized markdown renderer
+  // Enhanced markdown renderer with better formatting
   const MarkdownRenderer = React.memo(({ content, streaming = false }) => {
     if (!content && !streaming) return null
 
-    if (!streaming && isSecurityAudit(content)) {
-      return <SecurityAuditResults content={content} />
-    }
-
     return (
-      <div className="markdown-content">
+      <div className="markdown-content prose prose-invert max-w-none">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
           components={{
             h1: ({children}) => (
-              <h1 className="text-xl font-semibold text-white mt-6 mb-3">
+              <h1 className="text-2xl font-bold text-white mt-8 mb-4 border-b border-gray-700 pb-2">
                 {children}
               </h1>
             ),
             h2: ({children}) => (
-              <h2 className="text-lg font-semibold text-white mt-4 mb-2">
+              <h2 className="text-xl font-semibold text-white mt-6 mb-3">
                 {children}
               </h2>
             ),
             h3: ({children}) => (
-              <h3 className="text-base font-medium text-white mt-3 mb-2">
+              <h3 className="text-lg font-medium text-white mt-4 mb-2">
                 {children}
               </h3>
             ),
+            h4: ({children}) => (
+              <h4 className="text-base font-medium text-gray-200 mt-3 mb-2">
+                {children}
+              </h4>
+            ),
             p: ({children}) => (
-              <p className="text-gray-100 leading-relaxed mb-3">
+              <p className="text-gray-200 leading-relaxed mb-4 text-[15px]">
                 {children}
               </p>
             ),
@@ -93,15 +85,19 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
 
               if (!inline && match) {
                 return (
-                  <div className="my-4 bg-black rounded-lg overflow-hidden">
-                    <div className="bg-gray-800 px-4 py-2 text-xs text-gray-300 border-b border-gray-600">
-                      {match[1]}
+                  <div className="my-4 bg-gray-950 rounded-xl overflow-hidden border border-gray-800">
+                    <div className="bg-gray-900 px-4 py-2 text-xs text-gray-400 border-b border-gray-800 font-medium">
+                      {match[1].toUpperCase()}
                     </div>
                     <SyntaxHighlighter
                       style={tomorrow}
                       language={match[1]}
                       PreTag="div"
-                      className="!mt-0 !mb-0 text-sm"
+                      className="!mt-0 !mb-0 text-sm !bg-gray-950"
+                      customStyle={{
+                        background: 'transparent',
+                        padding: '1rem'
+                      }}
                       {...props}
                     >
                       {String(children).replace(/\n$/, '')}
@@ -111,29 +107,31 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
               }
 
               return (
-                <code className="bg-gray-800 text-red-400 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+                <code className="bg-gray-800 text-emerald-400 px-2 py-1 rounded text-sm font-mono" {...props}>
                   {children}
                 </code>
               )
             },
             ul: ({children}) => (
-              <ul className="space-y-1 mb-3 ml-4 list-disc text-gray-100">
+              <ul className="space-y-2 mb-4 ml-6 list-disc marker:text-gray-500">
                 {children}
               </ul>
             ),
             ol: ({children}) => (
-              <ol className="space-y-1 mb-3 ml-4 list-decimal text-gray-100">
+              <ol className="space-y-2 mb-4 ml-6 list-decimal marker:text-gray-500">
                 {children}
               </ol>
             ),
             li: ({children}) => (
-              <li className="text-gray-100">
+              <li className="text-gray-200 text-[15px] leading-relaxed">
                 {children}
               </li>
             ),
             blockquote: ({children}) => (
-              <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-3 bg-gray-800 rounded-r">
-                {children}
+              <blockquote className="border-l-4 border-blue-500 pl-6 py-3 my-4 bg-gray-800/30 rounded-r-lg">
+                <div className="text-gray-300 italic">
+                  {children}
+                </div>
               </blockquote>
             ),
             strong: ({children}) => (
@@ -141,16 +139,57 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
                 {children}
               </strong>
             ),
+            em: ({children}) => (
+              <em className="italic text-gray-300">
+                {children}
+              </em>
+            ),
+            table: ({children}) => (
+              <div className="my-4 overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-700 rounded-lg overflow-hidden">
+                  {children}
+                </table>
+              </div>
+            ),
+            thead: ({children}) => (
+              <thead className="bg-gray-800">
+                {children}
+              </thead>
+            ),
+            tbody: ({children}) => (
+              <tbody className="bg-gray-900/50 divide-y divide-gray-700">
+                {children}
+              </tbody>
+            ),
+            tr: ({children}) => (
+              <tr className="hover:bg-gray-800/50">
+                {children}
+              </tr>
+            ),
+            th: ({children}) => (
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                {children}
+              </th>
+            ),
+            td: ({children}) => (
+              <td className="px-4 py-3 text-sm text-gray-200">
+                {children}
+              </td>
+            ),
+            hr: () => (
+              <hr className="my-6 border-gray-700" />
+            )
           }}
         >
           {content}
         </ReactMarkdown>
 
         {streaming && (
-          <div className="flex items-center space-x-1 mt-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '120ms' }}></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '240ms' }}></span>
+          <div className="flex items-center space-x-2 mt-4">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+            <span className="text-xs text-gray-400 ml-2">Analyzing...</span>
           </div>
         )}
       </div>
