@@ -1,36 +1,84 @@
-// API configuration  
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// Shipable API configuration
+const SHIPABLE_API_BASE = 'https://api.shipable.ai/v2'
+const SHIPABLE_JWT_TOKEN = import.meta.env.VITE_SHIPABLE_JWT_TOKEN
 
-// Main contract analysis function
+// Main contract analysis function - directly calls Shipable API
 export const analyzeContract = async (code, filename = null) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+    // Step 1: Create session with Shipable API
+    console.log('🔄 Creating Shipable session...')
+
+    const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+        'Accept': 'application/json'
       },
       body: JSON.stringify({
-        code,
-        filename
+        source: "website"
+      })
+    })
+
+    if (!sessionResponse.ok) {
+      const errorText = await sessionResponse.text()
+      console.error('❌ Shipable session creation failed:', errorText)
+      throw new Error(`Failed to create Shipable session: ${sessionResponse.status} - ${errorText}`)
+    }
+
+    const sessionData = await sessionResponse.json()
+    console.log('✅ Shipable session created:', sessionData)
+
+    if (!sessionData || sessionData.statusCode !== 201 || !sessionData.data?.key) {
+      throw new Error(`Invalid session response from Shipable API: ${JSON.stringify(sessionData)}`)
+    }
+
+    return {
+      success: true,
+      sessionKey: sessionData.data.key,
+      metadata: {
+        language: detectContractLanguage(code, filename),
+        filename: filename || null,
+        lineCount: code ? code.split('\n').length : 0,
+        timestamp: new Date().toISOString(),
+        shipableSessionId: sessionData.data.id
+      }
+    }
+  } catch (error) {
+    console.error('API call failed:', error)
+    throw error
+  }
+}
+
+// Direct streaming analysis function
+export const streamAnalysis = async (sessionKey, message, code) => {
+  try {
+    console.log('🔄 Starting Shipable streaming analysis...')
+
+    const response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+        'Cache-Control': 'no-cache'
+      },
+      body: JSON.stringify({
+        sessionKey: sessionKey,
+        message: message,
+        contractCode: code || undefined
       })
     })
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || `Server Error: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      console.error('❌ Shipable streaming failed:', errorText)
+      throw new Error(`Analysis streaming failed: ${response.status} - ${errorText}`)
     }
 
-    const data = await response.json()
-
-    if (!data.success) {
-      throw new Error(data.error || 'Analysis failed')
-    }
-
-    return data
+    return response
   } catch (error) {
-    console.error('API call failed:', error)
-
-    // Re-throw the error so the frontend can handle it properly
+    console.error('Streaming analysis failed:', error)
     throw error
   }
 }

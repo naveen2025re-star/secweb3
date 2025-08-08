@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { checkBackendHealth } from './utils/api'
+import { checkBackendHealth, analyzeContract, streamAnalysis } from './utils/api'
 import Sidebar from './components/Sidebar'
 import ChatInterface from './components/ChatInterface'
 import ChatInput from './components/ChatInput'
@@ -59,11 +59,6 @@ function App() {
     setAnalyzing(true)
     setStreamingMessage('')
 
-    // Use secure backend API - Railway serves both frontend and backend
-    const API_BASE_URL = process.env.NODE_ENV === 'production' 
-      ? window.location.origin  // Same Railway domain for both frontend and API
-      : 'http://localhost:8000'  // Local development backend
-
     // Add user message immediately
     const userMessage = {
       id: Date.now(),
@@ -75,53 +70,25 @@ function App() {
     setMessages(prev => [...prev, userMessage])
 
     try {
-      // Step 1: Create secure session via our backend
-      console.log('🔄 Creating secure analysis session...')
-      const sessionResponse = await fetch(`${API_BASE_URL}/api/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: contractCode,
-          filename: contractCode ? 'contract.sol' : undefined
-        })
-      })
+      // Step 1: Create session directly with Shipable API
+      console.log('🔄 Creating Shipable session...')
+      const sessionData = await analyzeContract(contractCode, contractCode ? 'contract.sol' : undefined)
 
-      if (!sessionResponse.ok) {
-        const errorData = await sessionResponse.json()
-        throw new Error(errorData.error || `Session creation failed: ${sessionResponse.status}`)
-      }
-
-      const sessionData = await sessionResponse.json()
-      console.log('✅ Secure session created:', sessionData.metadata)
+      console.log('✅ Shipable session created:', sessionData.metadata)
 
       if (!sessionData.success || !sessionData.sessionKey) {
-        throw new Error('Invalid session response from backend API')
+        throw new Error('Invalid session response from Shipable API')
       }
 
       const sessionKey = sessionData.sessionKey
 
-      // Step 2: Start streaming analysis via our secure backend
-      console.log('🔄 Starting secure analysis stream...')
+      // Step 2: Start streaming analysis directly with Shipable API
+      console.log('🔄 Starting Shipable streaming analysis...')
 
-      const streamResponse = await fetch(`${API_BASE_URL}/api/analyze/stream/${sessionKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-          'Cache-Control': 'no-cache'
-        }
-      })
-
-      if (!streamResponse.ok) {
-        const errorText = await streamResponse.text()
-        console.error('❌ Streaming failed:', errorText)
-        throw new Error(`Analysis streaming failed: ${streamResponse.status}`)
-      }
+      const streamResponse = await streamAnalysis(sessionKey, message, contractCode)
 
       if (!streamResponse.body) {
-        throw new Error('No response body received from analysis endpoint')
+        throw new Error('No response body received from Shipable API')
       }
 
       // Step 3: Handle streaming response with optimized updates
@@ -130,7 +97,7 @@ function App() {
       let fullContent = ''
       let updateCounter = 0
 
-      console.log('🔄 Starting to read secure stream...')
+      console.log('🔄 Starting to read Shipable stream...')
 
       try {
         while (true) {
