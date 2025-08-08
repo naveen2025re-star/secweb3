@@ -1,8 +1,8 @@
 import { pool } from '../database.js';
 
 const createTables = async () => {
-  if (!pool) {
-    console.log('⚠️ Database not available - skipping table creation');
+  if (!process.env.DATABASE_URL) {
+    console.log('⚠️ DATABASE_URL not found - skipping table creation');
     return;
   }
 

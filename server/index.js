@@ -8,7 +8,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
-// Import new Web3 auth and database modules
+// Import database and auth modules
 import { testConnection } from './database.js';
 import web3AuthRoutes from './routes/web3Auth.js';
 import createTables from './migrations/001_create_tables.js';
@@ -150,10 +150,11 @@ const initializeDatabase = async () => {
     console.log('🔄 Initializing database connection...');
 
     if (!process.env.DATABASE_URL) {
-      console.log('⚠️ DATABASE_URL not found - running without database features');
-      return;
+      console.error('❌ DATABASE_URL environment variable is required');
+      process.exit(1);
     }
 
+    console.log('🔄 Testing database connection...');
     const isConnected = await testConnection();
 
     if (isConnected) {
@@ -161,19 +162,21 @@ const initializeDatabase = async () => {
       await createTables();
       console.log('✅ Database initialized successfully');
     } else {
-      console.log('⚠️ Database connection failed, running without database features');
+      console.error('❌ Failed to connect to database');
+      process.exit(1);
     }
   } catch (error) {
     console.error('❌ Database initialization failed:', error.message);
-    console.log('⚠️ Continuing without database features - server will work with limited functionality');
+    process.exit(1);
   }
 };
 
 // Initialize database when server starts
-initializeDatabase();
+await initializeDatabase();
 
 // Add Web3 authentication routes
 app.use('/api/auth', web3AuthRoutes);
+console.log('✅ Web3 authentication routes enabled');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
