@@ -59,10 +59,10 @@ function App() {
     setAnalyzing(true)
     setStreamingMessage('')
 
-    // Use secure backend API instead of direct Shipable calls
+    // Use secure backend API - Railway serves both frontend and backend
     const API_BASE_URL = process.env.NODE_ENV === 'production' 
-      ? window.location.origin  // Use same domain in production
-      : 'http://localhost:8000'  // Local development
+      ? window.location.origin  // Same Railway domain for both frontend and API
+      : 'http://localhost:8000'  // Local development backend
 
     // Add user message immediately
     const userMessage = {

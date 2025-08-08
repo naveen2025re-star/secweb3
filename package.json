@@ -13,8 +13,9 @@
     "start": "vite preview --host --port 4173",
     "start:backend": "cd server && npm start",
     "install:server": "cd server && npm install",
-    "railway:build": "cd server && npm install",
-    "railway:start": "cd server && npm start"
+    "railway:build": "npm install && npm run build && cd server && npm install",
+    "railway:start": "cd server && npm start",
+    "production": "npm run build && npm run start:backend"
   },
   "dependencies": {
     "react": "^18.2.0",
