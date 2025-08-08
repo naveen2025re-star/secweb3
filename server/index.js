@@ -148,6 +148,12 @@ const validateContractCode = (code) => {
 const initializeDatabase = async () => {
   try {
     console.log('🔄 Initializing database connection...');
+
+    if (!process.env.DATABASE_URL) {
+      console.log('⚠️ DATABASE_URL not found - running without database features');
+      return;
+    }
+
     const isConnected = await testConnection();
 
     if (isConnected) {
@@ -158,8 +164,8 @@ const initializeDatabase = async () => {
       console.log('⚠️ Database connection failed, running without database features');
     }
   } catch (error) {
-    console.error('❌ Database initialization failed:', error);
-    console.log('⚠️ Continuing without database features');
+    console.error('❌ Database initialization failed:', error.message);
+    console.log('⚠️ Continuing without database features - server will work with limited functionality');
   }
 };
 
@@ -176,9 +182,14 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: '2.0.0',
     features: {
-      web3Auth: true,
-      database: true,
-      shipableIntegration: true
+      web3Auth: !!process.env.JWT_SECRET,
+      database: !!process.env.DATABASE_URL,
+      shipableIntegration: !!process.env.SHIPABLE_JWT_TOKEN
+    },
+    environment: {
+      nodeVersion: process.version,
+      platform: process.platform,
+      NODE_ENV: process.env.NODE_ENV
     }
   });
 });

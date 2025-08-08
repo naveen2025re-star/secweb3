@@ -1,6 +1,11 @@
 import { pool } from '../database.js';
 
 const createTables = async () => {
+  if (!pool) {
+    console.log('⚠️ Database not available - skipping table creation');
+    return;
+  }
+
   const client = await pool.connect();
 
   try {

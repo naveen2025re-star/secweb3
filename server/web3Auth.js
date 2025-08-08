@@ -13,6 +13,10 @@ export const generateNonce = () => {
 
 // Create or get user by wallet address
 export const getOrCreateUser = async (walletAddress, ensName = null) => {
+  if (!pool) {
+    throw new Error('Database not available');
+  }
+
   try {
     // Check if user exists
     let result = await pool.query(
@@ -57,6 +61,10 @@ export const getNonce = async (walletAddress) => {
 
 // Verify signature and authenticate user
 export const verifySignature = async (walletAddress, signature, message) => {
+  if (!pool) {
+    throw new Error('Database not available');
+  }
+
   try {
     // Get user and verify nonce
     const result = await pool.query(
@@ -131,6 +139,10 @@ export const verifySignature = async (walletAddress, signature, message) => {
 
 // JWT middleware for Web3 auth
 export const authenticateWeb3Token = async (req, res, next) => {
+  if (!pool) {
+    return res.status(503).json({ error: 'Database service unavailable' });
+  }
+
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
