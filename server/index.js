@@ -13,21 +13,31 @@ const __dirname = path.dirname(__filename);
 // Helper function to generate UUID using crypto
 const generateUUID = () => crypto.randomUUID();
 
-// NOW load environment variables with the correct path
-const result = dotenv.config({ path: path.join(__dirname, '.env') });
+// Load environment variables safely for production (Railway provides env vars directly)
+let result;
+if (process.env.NODE_ENV === 'production') {
+  // In production, Railway provides environment variables directly
+  result = { parsed: process.env };
+  console.log('🔍 Using Railway environment variables');
+} else {
+  // In development, load from .env file
+  result = dotenv.config({ path: path.join(__dirname, '.env') });
+}
 
 // Debug environment loading
-console.log('🔍 Dotenv loading result:', result.error ? result.error.message : 'Success');
+console.log('🔍 Environment loading result:', result.error ? result.error.message : 'Success');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Validate required environment variables FIRST
+// Validate required environment variables
 if (!process.env.SHIPABLE_JWT_TOKEN) {
   console.error('❌ SHIPABLE_JWT_TOKEN is required but not found in environment variables');
-  console.error('   Please check your server/.env file');
-  console.error('   Available env vars:', Object.keys(process.env).filter(key => key.startsWith('SHIPABLE')));
-  process.exit(1);
+  console.error('   Available SHIPABLE vars:', Object.keys(process.env).filter(key => key.startsWith('SHIPABLE')));
+  // Don't exit in production, let Railway handle restart
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
 }
 
 // Shipable AI configuration
@@ -597,18 +607,29 @@ app.use((error, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Endpoint not found',
-    availableEndpoints: [
-      'GET /api/health',
-      'POST /api/analyze',
-      'POST /api/upload',
-      'GET /api/languages'
-    ]
-  });
+// Serve static files (frontend)
+const staticPath = path.join(__dirname, '../dist');
+console.log('📁 Serving static files from:', staticPath);
+app.use(express.static(staticPath));
+
+// Catch-all for React Router (serve index.html for non-API routes)
+app.get('*', (req, res) => {
+  // Don't serve index.html for API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      error: 'API endpoint not found',
+      availableEndpoints: [
+        'GET /api/health',
+        'POST /api/analyze',
+        'POST /api/upload',
+        'GET /api/languages'
+      ]
+    });
+  }
+
+  // Serve React app for all other routes
+  res.sendFile(path.join(staticPath, 'index.html'));
 });
 
 // Start server
