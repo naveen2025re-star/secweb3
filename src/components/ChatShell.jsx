@@ -1,45 +1,38 @@
-import React from 'react'
-import { useWeb3Auth } from './hooks/useWeb3Auth'
-import Web3Auth from './components/Web3Auth'
-import ChatShell from './components/ChatShell'
-import {Sidebar} from "lucide-react";
+import React, { useState, useEffect } from 'react'
+import Sidebar from './Sidebar'
+import ChatInterface from './ChatInterface'
+import ChatInput from './ChatInput'
+import { checkBackendHealth, analyzeContract, streamAnalysis } from '../utils/api'
 
-function App() {
-  // Single source of truth for web3/auth state
-  const {
-    user,
-    token,
-    isConnected,
-    account,
-    ensName,
-    isConnecting,
-    isMetaMaskInstalled,
-    connectWallet,
-    authenticate,
-    logout
-  } = useWeb3Auth()
+/**
+ * ChatShell renders the authenticated chat experience.
+ * It holds all chat-related hooks and state so that App.jsx doesn't call hooks conditionally.
+ */
+const ChatShell = ({ user }) => {
+  const [code, setCode] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
+  const [messages, setMessages] = useState([])
+  const [streamingMessage, setStreamingMessage] = useState('')
+  const [backendHealth, setBackendHealth] = useState({ healthy: false, checking: true })
 
-  const isAuthenticated = !!user && !!token
-
-  return isAuthenticated ? (
-    <ChatShell user={user} />
-  ) : (
-    <Web3Auth
-      onAuthSuccess={() => {}}
-      isConnected={isConnected}
-      account={account}
-      ensName={ensName}
-      isConnecting={isConnecting}
-      user={user}
-      isMetaMaskInstalled={isMetaMaskInstalled}
-      connectWallet={connectWallet}
-      authenticate={authenticate}
-      logout={logout}
-    />
-  )
-}
-
-export default App
+  // Conversation management
+  const [conversations, setConversations] = useState([
+    {
+      id: '1',
+      title: 'Welcome to SecWeb3',
+      timestamp: Date.now() - 3600000,
+      messages: [],
+      userId: user?.id
+    },
+    {
+      id: '2',
+      title: 'Smart Contract Analysis',
+      timestamp: Date.now() - 7200000,
+      messages: [],
+      userId: user?.id
+    }
+  ])
+  const [activeConversation, setActiveConversation] = useState('1')
 
   // Check backend health on component mount
   useEffect(() => {
@@ -78,10 +71,7 @@ export default App
 
     try {
       // Step 1: Create session directly with Shipable API
-      console.log('🔄 Creating Shipable session...')
       const sessionData = await analyzeContract(contractCode, contractCode ? 'contract.sol' : undefined)
-
-      console.log('✅ Shipable session created:', sessionData.metadata)
 
       if (!sessionData.success || !sessionData.sessionKey) {
         throw new Error('Invalid session response from Shipable API')
@@ -90,8 +80,6 @@ export default App
       const sessionKey = sessionData.sessionKey
 
       // Step 2: Start streaming analysis directly with Shipable API
-      console.log('🔄 Starting Shipable streaming analysis...')
-
       const streamResponse = await streamAnalysis(sessionKey, message, contractCode)
 
       if (!streamResponse.body) {
@@ -104,16 +92,11 @@ export default App
       let fullContent = ''
       let updateCounter = 0
 
-      console.log('🔄 Starting to read Shipable stream...')
-
       try {
         while (true) {
           const { done, value } = await reader.read()
 
-          if (done) {
-            console.log('🔄 Stream reading completed naturally')
-            break
-          }
+          if (done) break
 
           const chunk = decoder.decode(value)
           const lines = chunk.split('\n')
@@ -123,7 +106,6 @@ export default App
               const data = line.slice(6).trim()
 
               if (data === '[DONE]') {
-                console.log('🔄 Received [DONE] marker - analysis complete')
                 setAnalyzing(false)
                 setStreamingMessage('')
 
@@ -151,8 +133,8 @@ export default App
                       setStreamingMessage(fullContent)
                     }
                   }
-                } catch (parseError) {
-                  console.error('Error parsing streaming data:', parseError)
+                } catch {
+                  // ignore parse errors for partial SSE chunks
                 }
               }
             }
@@ -160,7 +142,6 @@ export default App
         }
 
         // If we reach here, stream ended naturally
-        console.log('🔄 Stream ended naturally - analysis complete')
         setAnalyzing(false)
         setStreamingMessage('')
 
@@ -175,17 +156,15 @@ export default App
         setMessages(prev => [...prev, aiMessage])
 
       } catch (streamError) {
-        console.error('❌ Stream reading error:', streamError)
         try {
           reader.releaseLock()
-        } catch (releaseError) {
-          console.error('Error releasing reader lock:', releaseError)
+        } catch {
+          // ignore
         }
         throw streamError
       }
 
     } catch (error) {
-      console.error('Analysis error:', error)
       setAnalyzing(false)
       setStreamingMessage('')
 
@@ -251,4 +230,4 @@ export default App
   )
 }
 
-export default App
+export default ChatShell
