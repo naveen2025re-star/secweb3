@@ -49,7 +49,12 @@ const Web3Auth = ({ onAuthSuccess }) => {
   };
 
   const formatAddress = (address) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    if (typeof address !== 'string') return '';
+    try {
+      return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    } catch {
+      return '';
+    }
   };
 
   // Not authenticated - show login options
@@ -110,7 +115,7 @@ const Web3Auth = ({ onAuthSuccess }) => {
                   <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
                   <p className="text-green-400 font-medium">Wallet Connected</p>
                   <p className="text-gray-400 text-sm">
-                    {ensName || formatAddress(account)}
+                    {ensName || (account ? formatAddress(account) : '')}
                   </p>
                 </div>
 
@@ -163,7 +168,7 @@ const Web3Auth = ({ onAuthSuccess }) => {
         </div>
         <div className="hidden md:block">
           <p className="text-sm font-medium text-white">
-            {user.ensName || formatAddress(user.walletAddress)}
+            {user?.ensName || (user?.walletAddress ? formatAddress(user.walletAddress) : '')}
           </p>
           <p className="text-xs text-gray-400">
             {user.apiCallsCount}/{user.apiCallsLimit} API calls
