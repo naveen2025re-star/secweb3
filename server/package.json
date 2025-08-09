@@ -1,6 +1,6 @@
 {
   "name": "smart-contract-auditor-backend",
-  "version": "1.0.0",
+  "version": "2.0.2",
   "type": "module",
   "description": "Backend API for Smart Contract Auditor",
   "main": "index.js",
@@ -21,7 +21,10 @@
     "express-rate-limit": "^6.10.0",
     "openai": "^4.24.1",
     "dotenv": "^16.3.1",
-    "multer": "^1.4.4"
+    "multer": "^1.4.4",
+    "pg": "^8.11.3",
+    "jsonwebtoken": "^9.0.2",
+    "ethers": "^5.7.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
