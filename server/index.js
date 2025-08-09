@@ -8,6 +8,32 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
+// Check if critical dependencies are available
+console.log('🔍 Checking dependencies...');
+try {
+  await import('pg');
+  console.log('✅ pg package found');
+} catch (error) {
+  console.error('❌ pg package missing:', error.message);
+  process.exit(1);
+}
+
+try {
+  await import('jsonwebtoken');
+  console.log('✅ jsonwebtoken package found');
+} catch (error) {
+  console.error('❌ jsonwebtoken package missing:', error.message);
+  process.exit(1);
+}
+
+try {
+  await import('ethers');
+  console.log('✅ ethers package found');
+} catch (error) {
+  console.error('❌ ethers package missing:', error.message);
+  process.exit(1);
+}
+
 // Import database and auth modules
 import { testConnection } from './database.js';
 import web3AuthRoutes from './routes/web3Auth.js';
