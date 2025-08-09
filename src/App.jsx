@@ -7,14 +7,36 @@ import ChatInterface from './components/ChatInterface'
 import ChatInput from './components/ChatInput'
 
 function App() {
-  const { user, token, isConnected } = useWeb3Auth()
+  // Single source of truth for web3/auth state
+  const {
+    user,
+    token,
+    isConnected,
+    account,
+    ensName,
+    isConnecting,
+    isMetaMaskInstalled,
+    connectWallet,
+    authenticate,
+    logout
+  } = useWeb3Auth()
 
   // Show Web3Auth if not authenticated
   if (!user || !token) {
-    return <Web3Auth onAuthSuccess={(userData) => {
-      console.log('User authenticated:', userData)
-      // App will re-render automatically due to useWeb3Auth hook
-    }} />
+    return (
+      <Web3Auth
+        onAuthSuccess={() => {}}
+        isConnected={isConnected}
+        account={account}
+        ensName={ensName}
+        isConnecting={isConnecting}
+        user={user}
+        isMetaMaskInstalled={isMetaMaskInstalled}
+        connectWallet={connectWallet}
+        authenticate={authenticate}
+        logout={logout}
+      />
+    )
   }
 
   const [code, setCode] = useState('')

@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
-import { useWeb3Auth } from '../hooks/useWeb3Auth';
 import { Wallet, User, LogOut, AlertCircle, CheckCircle } from 'lucide-react';
 
-const Web3Auth = ({ onAuthSuccess }) => {
-  const {
-    isConnected,
-    account,
-    ensName,
-    isConnecting,
-    user,
-    isMetaMaskInstalled,
-    connectWallet,
-    authenticate,
-    logout,
-  } = useWeb3Auth();
-
+/**
+ * Web3Auth presentational component.
+ * Receives all state and handlers via props. Does not use hooks internally.
+ */
+const Web3Auth = ({
+  onAuthSuccess,
+  // Auth/web3 state from parent
+  isConnected,
+  account,
+  ensName,
+  isConnecting,
+  user,
+  isMetaMaskInstalled,
+  // Handlers from parent
+  connectWallet,
+  authenticate,
+  logout
+}) => {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState(null);
 
