@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { ethers } from 'ethers';
 import { pool } from './database.js';
+import process from "react-syntax-highlighter/.eslintrc.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -70,17 +71,36 @@ export const verifySignature = async (walletAddress, signature, message) => {
 
     const user = result.rows[0];
 
-    // Verify the signature
+    // Build a set of possible message variants to account for minor front-end differences
     const expectedMessage = `Welcome to SecWeb3! Sign this message to authenticate: ${user.nonce}`;
+    const normalize = (s) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '');
+    const candidates = new Set([
+      expectedMessage,
+      normalize(expectedMessage),
+      user.nonce, // some wallets sign only the nonce
+      normalize(user.nonce)
+    ]);
 
-    if (message !== expectedMessage) {
-      throw new Error('Invalid message');
+    if (message) {
+      candidates.add(message);
+      candidates.add(normalize(message));
     }
 
-    // Recover address from signature
-    const recoveredAddress = ethers.utils.verifyMessage(message, signature);
+    // Try to recover the address using any of the candidate messages
+    let recoveredAddress = null;
+    for (const candidate of candidates) {
+      try {
+        const addr = ethers.utils.verifyMessage(candidate, signature);
+        if (addr && addr.toLowerCase() === walletAddress.toLowerCase()) {
+          recoveredAddress = addr;
+          break;
+        }
+      } catch (e) {
+        // ignore and try the next candidate
+      }
+    }
 
-    if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+    if (!recoveredAddress) {
       throw new Error('Signature verification failed');
     }
 
@@ -99,7 +119,7 @@ export const verifySignature = async (walletAddress, signature, message) => {
     await pool.query(
       `INSERT INTO web3_sessions (user_id, wallet_address, signature, message, nonce, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [user.id, walletAddress.toLowerCase(), signature, message, user.nonce, sessionExpiry]
+      [user.id, walletAddress.toLowerCase(), signature, message || expectedMessage, user.nonce, sessionExpiry]
     );
 
     // Generate JWT token

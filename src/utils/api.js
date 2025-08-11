@@ -1,7 +1,7 @@
 // API configuration
 const SHIPABLE_API_BASE = 'https://api.shipable.ai/v2'
 const SHIPABLE_JWT_TOKEN = import.meta.env.VITE_SHIPABLE_JWT_TOKEN
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000')
 
 // Get auth token from localStorage
 const getAuthToken = () => {

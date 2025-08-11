@@ -38,6 +38,7 @@ try {
 import { testConnection } from './database.js';
 import web3AuthRoutes from './routes/web3Auth.js';
 import createTables from './migrations/001_create_tables.js';
+import process from "react-syntax-highlighter/.eslintrc.js";
 
 // __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -102,7 +103,12 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL,
+    process.env.CORS_ORIGIN,
+    'https://secweb3-production.up.railway.app',
+    'http://localhost:5173'
+  ].filter(Boolean),
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control'],
   credentials: true

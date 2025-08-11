@@ -36,9 +36,9 @@ router.post('/verify', async (req, res) => {
   try {
     const { walletAddress, signature, message, ensName } = req.body;
 
-    if (!walletAddress || !signature || !message) {
+    if (!walletAddress || !signature) {
       return res.status(400).json({ 
-        error: 'Wallet address, signature, and message are required' 
+        error: 'Wallet address and signature are required' 
       });
     }
 
