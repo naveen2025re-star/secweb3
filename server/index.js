@@ -317,7 +317,6 @@ const checkCreditsMiddleware = async (req, res, next) => {
   try {
     // Import credit utilities dynamically to avoid startup errors
     const { getUserPlan, computeScanCost, validateScanAgainstPlan, deductCredits } = await import('./planUtils.js');
-    const { authenticateWeb3Token } = await import('./web3Auth.js');
 
     // Check if user is authenticated
     const authHeader = req.headers['authorization'];
@@ -328,8 +327,8 @@ const checkCreditsMiddleware = async (req, res, next) => {
 
     // Authenticate user
     const token = authHeader.split(' ')[1];
-    const jwt = await import('jsonwebtoken');
-    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const jwtModule = await import('jsonwebtoken');
+    const decoded = jwtModule.default.verify(token, process.env.JWT_SECRET || 'your-secret-key');
 
     // Get user plan
     const userPlan = await getUserPlan(decoded.userId);

@@ -47,6 +47,18 @@ const createPlansSystem = async () => {
       5000, 1000, 100, 0, JSON.stringify(["Custom credit allocation", "100+ files per scan", "API access", "White-label options", "Dedicated support", "Custom integrations"])
     ]);
 
+    // First check if users table exists and get its structure
+    const userTableInfo = await pool.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'id'
+    `);
+
+    const isUserIdUuid = userTableInfo.rows.length > 0 && 
+                        userTableInfo.rows[0].data_type === 'uuid';
+
+    console.log(`📊 Users table ID type: ${isUserIdUuid ? 'UUID' : 'INTEGER'}`);
+
     // Update users table to reference plans
     await pool.query(`
       ALTER TABLE users 
@@ -65,11 +77,14 @@ const createPlansSystem = async () => {
       WHERE plan_id IS NULL
     `);
 
-    // Create upgrade requests table
+    // Create upgrade requests table with appropriate user_id type
+    const userIdType = isUserIdUuid ? 'UUID' : 'INTEGER';
+    const userIdReference = isUserIdUuid ? 'users(id)' : 'users(id)';
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS upgrade_requests (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id),
+        user_id ${userIdType} NOT NULL,
         requested_plan_code TEXT NOT NULL,
         company_name TEXT,
         contact_email TEXT NOT NULL,
@@ -82,9 +97,34 @@ const createPlansSystem = async () => {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         reviewed_at TIMESTAMP WITH TIME ZONE,
-        reviewed_by INTEGER REFERENCES users(id)
+        reviewed_by ${userIdType}
       )
     `);
+
+    // Add foreign key constraints separately to handle UUID vs INTEGER
+    try {
+      await pool.query(`
+        ALTER TABLE upgrade_requests 
+        ADD CONSTRAINT upgrade_requests_user_id_fkey 
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      `);
+    } catch (error) {
+      if (!error.message.includes('already exists')) {
+        console.warn('⚠️ Foreign key constraint creation skipped:', error.message);
+      }
+    }
+
+    try {
+      await pool.query(`
+        ALTER TABLE upgrade_requests 
+        ADD CONSTRAINT upgrade_requests_reviewed_by_fkey 
+        FOREIGN KEY (reviewed_by) REFERENCES users(id)
+      `);
+    } catch (error) {
+      if (!error.message.includes('already exists')) {
+        console.warn('⚠️ Foreign key constraint creation skipped:', error.message);
+      }
+    }
 
     // Create indexes
     await pool.query(`
