@@ -312,8 +312,89 @@ app.post('/api/test-session', async (req, res) => {
   }
 });
 
+// Credit checking middleware (non-blocking)
+const checkCreditsMiddleware = async (req, res, next) => {
+  try {
+    // Import credit utilities dynamically to avoid startup errors
+    const { getUserPlan, computeScanCost, validateScanAgainstPlan, deductCredits } = await import('./planUtils.js');
+    const { authenticateWeb3Token } = await import('./web3Auth.js');
+
+    // Check if user is authenticated
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      // Allow anonymous scans with basic limits
+      return next();
+    }
+
+    // Authenticate user
+    const token = authHeader.split(' ')[1];
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+
+    // Get user plan
+    const userPlan = await getUserPlan(decoded.userId);
+    if (!userPlan) {
+      console.warn('User plan not found, allowing scan');
+      return next();
+    }
+
+    // Calculate scan cost
+    const { code, filename } = req.body;
+    const files = [{ 
+      name: filename || 'contract.sol', 
+      content: code, 
+      size: Buffer.byteLength(code, 'utf8') 
+    }];
+    const scanCost = computeScanCost({ files });
+
+    // Validate against plan limits
+    const validation = validateScanAgainstPlan(scanCost, 1, userPlan);
+
+    if (!validation.isValid) {
+      // Block scan if it exceeds plan limits
+      return res.status(402).json({
+        success: false,
+        error: 'Scan exceeds plan limits',
+        errors: validation.errors,
+        scanCost,
+        userCredits: userPlan.credits_balance,
+        planName: userPlan.plan_name
+      });
+    }
+
+    // Pre-deduct credits (will be finalized after successful scan)
+    try {
+      await deductCredits(decoded.userId, scanCost);
+      req.creditInfo = {
+        userId: decoded.userId,
+        scanCost,
+        originalBalance: userPlan.credits_balance,
+        newBalance: userPlan.credits_balance - scanCost
+      };
+      console.log(`💳 Credits deducted: ${scanCost} (${req.creditInfo.newBalance} remaining)`);
+    } catch (creditError) {
+      if (creditError.message === 'INSUFFICIENT_CREDITS') {
+        return res.status(402).json({
+          success: false,
+          error: 'Insufficient credits',
+          scanCost,
+          availableCredits: userPlan.credits_balance,
+          message: 'Please upgrade your plan to continue'
+        });
+      }
+      throw creditError;
+    }
+
+    next();
+  } catch (error) {
+    console.warn('Credit check failed (non-blocking):', error.message);
+    // Never block scans for credit system errors
+    next();
+  }
+};
+
 // Create new analysis session using Shipable API
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', checkCreditsMiddleware, async (req, res) => {
   try {
     console.log('Received analyze request:', { hasCode: !!req.body?.code, filename: req.body?.filename });
 
@@ -331,19 +412,6 @@ app.post('/api/analyze', async (req, res) => {
 
     const language = detectContractLanguage(code, filename);
     const lineCount = code.split('\n').length;
-
-    // Optional: Basic usage tracking (non-blocking)
-    try {
-      const authHeader = req.headers['authorization'];
-      if (authHeader) {
-        const token = authHeader.split(' ')[1];
-        console.log('📊 Tracking usage for authenticated scan:', { language, lineCount });
-        // Future: Add basic credit deduction here when plan system is stable
-      }
-    } catch (trackingError) {
-      // Never block scans for tracking errors
-      console.warn('Usage tracking failed (non-blocking):', trackingError.message);
-    }
 
     console.log(`[${new Date().toISOString()}] Creating Shipable session for ${language} contract analysis: ${lineCount} lines`);
 

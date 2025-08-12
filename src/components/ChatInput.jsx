@@ -32,6 +32,7 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
     reader.onload = (event) => {
       setCode(event.target.result || '')
       setFilename(file.name || '')
+        setEstimatedCost(null);
     }
     reader.readAsText(file)
   }

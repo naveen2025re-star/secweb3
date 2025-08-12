@@ -25,6 +25,24 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
   const [conversations, setConversations] = useState([])
   const [activeConversation, setActiveConversation] = useState(null)
 
+  // Credit management
+  const [userPlan, setUserPlan] = useState(null)
+  const [creditsBalance, setCreditsBalance] = useState(user?.creditsBalance || 0)
+
+  // Load user plan and credits
+  const loadUserPlan = async () => {
+    try {
+      const { getUserPlan } = await import('../utils/api');
+      const planData = await getUserPlan();
+      if (planData) {
+        setUserPlan(planData.plan);
+        setCreditsBalance(planData.creditsBalance);
+      }
+    } catch (error) {
+      console.warn('Failed to load user plan:', error);
+    }
+  };
+
   // Check backend health and load conversations on component mount
   useEffect(() => {
     const checkHealth = async () => {
@@ -75,6 +93,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
 
     checkHealth()
     loadConversations()
+    loadUserPlan()
 
     // Check health every 30 seconds
     const healthInterval = setInterval(checkHealth, 30000)
@@ -148,11 +167,34 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
     }
 
     try {
-      // Step 1: Create session
+      // Step 1: Create session (with credit deduction)
       const sessionData = await analyzeContract(contractCode, contractCode ? 'contract.sol' : undefined)
 
-      if (!sessionData.success || !sessionData.sessionKey) {
-        throw new Error('Failed to create analysis session')
+      if (!sessionData.success) {
+        // Check for credit-related errors
+        if (sessionData.error && sessionData.scanCost) {
+          const errorMsg = sessionData.error.includes('credits') 
+            ? `❌ **Insufficient Credits**\n\nThis scan requires ${sessionData.scanCost} credits but you only have ${sessionData.availableCredits || sessionData.userCredits || 0}.\n\n[Upgrade your plan](javascript:void(0)) to continue.`
+            : `❌ **Scan Blocked**\n\n${sessionData.error}\n\nPlan: ${sessionData.planName || 'Unknown'}`;
+
+          const errorMessage = {
+            id: Date.now() + 2,
+            type: 'ai',
+            content: errorMsg,
+            timestamp: new Date().toLocaleTimeString(),
+            error: true
+          };
+          setMessages(prev => [...prev, errorMessage]);
+          return;
+        }
+
+        throw new Error(sessionData.error || 'Failed to create analysis session');
+      }
+
+      // Update credits balance if provided
+      if (sessionData.creditInfo) {
+        setCreditsBalance(sessionData.creditInfo.creditsRemaining);
+        console.log(`💳 Credits updated: ${sessionData.creditInfo.creditsRemaining} remaining`);
       }
 
       // Step 2: Start streaming
@@ -390,7 +432,11 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
       <Header
         darkMode={darkMode}
         toggleDarkMode={() => setDarkMode(!darkMode)}
-        user={user}
+        user={{
+          ...user,
+          creditsBalance,
+          plan: userPlan
+        }}
         onShowPlans={onShowPlans}
         onDisconnect={onDisconnect}
       />
