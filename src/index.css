@@ -9,16 +9,20 @@
     box-sizing: border-box;
   }
 
+  html, body, #root {
+    height: 100%;
+  }
+
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-    background: #fafbfc;
-    color: #1f2937;
+    background: #0f1419; /* dark by default to avoid white gaps */
+    color: #e5e7eb;
     line-height: 1.5;
   }
 
-  .dark body {
-    background: #0f1419;
-    color: #e5e7eb;
+  .light body {
+    background: #fafbfc;
+    color: #1f2937;
   }
 
   .font-mono {

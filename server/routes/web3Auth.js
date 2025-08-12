@@ -63,7 +63,7 @@ router.post('/verify', async (req, res) => {
   }
 });
 
-// Get user profile
+// Get user profile (camelCase response)
 router.get('/profile', authenticateWeb3Token, async (req, res) => {
   try {
     const result = await pool.query(
@@ -77,13 +77,60 @@ router.get('/profile', authenticateWeb3Token, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const row = result.rows[0];
     res.json({
       success: true,
-      user: result.rows[0]
+      user: {
+        id: row.id,
+        walletAddress: row.wallet_address,
+        ensName: row.ens_name,
+        subscriptionTier: row.subscription_tier,
+        apiCallsCount: row.api_calls_count,
+        apiCallsLimit: row.api_calls_limit,
+        createdAt: row.created_at,
+        lastLoginAt: row.last_login_at
+      }
     });
   } catch (error) {
     console.error('Profile fetch error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update profile (display name -> ens_name)
+router.put('/profile', authenticateWeb3Token, async (req, res) => {
+  try {
+    const { displayName } = req.body;
+
+    if (!displayName || !displayName.trim()) {
+      return res.status(400).json({ error: 'Display name is required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE users 
+       SET ens_name = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, wallet_address, ens_name, subscription_tier, api_calls_count, api_calls_limit, created_at, last_login_at`,
+      [displayName.trim(), req.user.id]
+    );
+
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      user: {
+        id: row.id,
+        walletAddress: row.wallet_address,
+        ensName: row.ens_name,
+        subscriptionTier: row.subscription_tier,
+        apiCallsCount: row.api_calls_count,
+        apiCallsLimit: row.api_calls_limit,
+        createdAt: row.created_at,
+        lastLoginAt: row.last_login_at
+      }
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 

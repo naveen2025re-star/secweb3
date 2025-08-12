@@ -211,6 +211,28 @@ export const getUserProfile = async () => {
   }
 }
 
+export const updateUserProfile = async (displayName) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify({ displayName })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to update profile: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to update profile:', error)
+    throw error
+  }
+}
+
 // Conversation API functions
 
 // Get user conversations

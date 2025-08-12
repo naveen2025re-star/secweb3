@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, MessageSquare, MoreHorizontal, Edit3, Trash2, Search, Wallet, LogOut, Copy, Check } from 'lucide-react'
 import { useWeb3Auth } from '../hooks/useWeb3Auth'
+import ProfileModal from './ProfileModal'
 
 const Sidebar = ({ user, conversations, activeConversation, onNewConversation, onSelectConversation, onDeleteConversation, onRenameConversation }) => {
   const { logout } = useWeb3Auth()
@@ -9,6 +10,7 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
   const [copiedAddress, setCopiedAddress] = useState(false)
   const [editingConversation, setEditingConversation] = useState(null)
   const [editTitle, setEditTitle] = useState('')
+  const [profileOpen, setProfileOpen] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -131,9 +133,20 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
                 <Wallet className="w-5 h-5 text-white" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-white truncate">
-                  {user?.ensName || (formatAddress(user?.walletAddress) || user?.walletAddress?.slice(0, 8) + '...' || 'Wallet User')}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-white truncate">
+                    {(user?.ensName && user.ensName.trim()) 
+                      ? user.ensName 
+                      : (user?.walletAddress ? formatAddress(user.walletAddress) : 'Wallet User')}
+                  </p>
+                  <button
+                    onClick={() => setProfileOpen(true)}
+                    className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700"
+                    title="Edit profile"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-1">
                     <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -169,6 +182,18 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
               <LogOut className="w-4 h-4" />
             </button>
           </div>
+          {/* Profile Modal */}
+          <ProfileModal
+            open={profileOpen}
+            onClose={() => setProfileOpen(false)}
+            onSaved={(updated) => {
+              // Update local displayed user name without full reload
+              if (updated?.ensName) {
+                // no direct setter for user here; rely on page reload or optional callback via context if needed
+                setProfileOpen(false)
+              }
+            }}
+          />
         </div>
       )}
 

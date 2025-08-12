@@ -248,6 +248,20 @@ const ChatShell = ({ user }) => {
         }
         setMessages(prev => [...prev, aiMessage])
 
+        // Persist AI message to the database (covers cases where no "[DONE]" is sent)
+        if (conversationId && !String(conversationId).startsWith('local_')) {
+          try {
+            await addMessageToConversation(
+              conversationId,
+              'assistant',
+              fullContent,
+              { sessionKey, analysis: true }
+            )
+          } catch (error) {
+            console.error('Failed to save AI message (natural end):', error)
+          }
+        }
+
       } catch (streamError) {
         try {
           reader.releaseLock()
