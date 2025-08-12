@@ -50,7 +50,7 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
     if (!content && !streaming) return null
 
     return (
-      <div className="markdown-content prose prose-invert max-w-none">
+      <div className="markdown-content prose prose-invert max-w-none break-words">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
@@ -197,10 +197,10 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
   })
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-gray-800">
+    <div className="flex-1 flex flex-col min-h-0 bg-gray-800">
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4">
           {messages.length === 0 && !isAnalyzing && (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
               <h2 className="text-2xl font-semibold text-white mb-2">

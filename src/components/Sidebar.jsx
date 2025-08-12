@@ -4,7 +4,7 @@ import { useWeb3Auth } from '../hooks/useWeb3Auth'
 import ProfileModal from './ProfileModal'
 
 const Sidebar = ({ user, conversations, activeConversation, onNewConversation, onSelectConversation, onDeleteConversation, onRenameConversation }) => {
-  const { logout } = useWeb3Auth()
+  const { logout, refreshProfile } = useWeb3Auth()
   const [hoveredConversation, setHoveredConversation] = useState(null)
   const [query, setQuery] = useState('')
   const [copiedAddress, setCopiedAddress] = useState(false)
@@ -186,12 +186,9 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
           <ProfileModal
             open={profileOpen}
             onClose={() => setProfileOpen(false)}
-            onSaved={(updated) => {
-              // Update local displayed user name without full reload
-              if (updated?.ensName) {
-                // no direct setter for user here; rely on page reload or optional callback via context if needed
-                setProfileOpen(false)
-              }
+            onSaved={async () => {
+              await refreshProfile();
+              setProfileOpen(false);
             }}
           />
         </div>

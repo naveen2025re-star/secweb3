@@ -160,6 +160,19 @@
   line-height: 1.7;
   max-width: none;
   font-size: 15px;
+  overflow-wrap: anywhere; /* prevent horizontal overflow on long tokens */
+}
+
+/* Keep images and tables responsive in markdown */
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.markdown-content table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
 }
 
 .markdown-content h1,

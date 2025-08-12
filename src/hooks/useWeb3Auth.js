@@ -259,6 +259,34 @@ export const useWeb3Auth = () => {
     };
   }, [account, logout, isMetaMaskInstalled]);
 
+  // Allow components to refresh the user profile after updates
+  const refreshProfile = useCallback(async () => {
+    try {
+      if (!token) return null;
+      const response = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (data?.success && data.user) {
+        setUser({
+          id: data.user.id,
+          walletAddress: data.user.walletAddress || data.user.wallet_address,
+          ensName: data.user.ensName || data.user.ens_name,
+          subscriptionTier: data.user.subscriptionTier || data.user.subscription_tier,
+          apiCallsCount: data.user.apiCallsCount ?? data.user.api_calls_count,
+          apiCallsLimit: data.user.apiCallsLimit ?? data.user.api_calls_limit,
+        });
+        return data.user;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [token]);
+
   return {
     isConnected,
     account,
@@ -272,5 +300,6 @@ export const useWeb3Auth = () => {
     connectWallet,
     authenticate,
     logout,
+    refreshProfile,
   };
 };
