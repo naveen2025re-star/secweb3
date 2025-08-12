@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateWeb3Token } from '../web3Auth.js';
+import { authenticateWeb3Token } from './web3Auth.js';
 import { 
   getActivePlans, 
   getPlanByCode, 

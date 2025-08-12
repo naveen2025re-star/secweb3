@@ -32,8 +32,8 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
   // Load user plan and credits
   const loadUserPlan = async () => {
     try {
-      const { getUserPlan } = await import('../utils/api');
-      const planData = await getUserPlan();
+      const apiModule = await import('../utils/api');
+      const planData = await apiModule.getUserPlan();
       if (planData) {
         setUserPlan(planData.plan);
         setCreditsBalance(planData.creditsBalance);
