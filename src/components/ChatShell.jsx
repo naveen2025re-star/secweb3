@@ -144,25 +144,7 @@ const ChatShell = ({ user }) => {
       }
     }
 
-    // Save user message to database
-    if (activeConversation && !activeConversation.startsWith('local_')) {
-      try {
-        await fetch(`/api/conversations/${activeConversation}/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
-          },
-          body: JSON.stringify({
-            role: 'user',
-            content: message,
-            metadata: { code: contractCode }
-          })
-        })
-      } catch (error) {
-        console.error('Failed to save user message:', error)
-      }
-    }
+    // Message persisted above via addMessageToConversation
 
     try {
       // Step 1: Create session directly with Shipable API
@@ -228,25 +210,7 @@ const ChatShell = ({ user }) => {
                   }
                 }
 
-                // Save AI message to database
-                if (activeConversation && !activeConversation.startsWith('local_')) {
-                  try {
-                    await fetch(`/api/conversations/${activeConversation}/messages`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
-                      },
-                      body: JSON.stringify({
-                        role: 'assistant',
-                        content: fullContent,
-                        metadata: {}
-                      })
-                    })
-                  } catch (error) {
-                    console.error('Failed to save AI message:', error)
-                  }
-                }
+                // Message persisted above via addMessageToConversation
                 return
               }
 

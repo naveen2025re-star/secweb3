@@ -223,15 +223,8 @@ import conversationRoutes from './routes/conversations.js';
 app.use('/api/conversations', conversationRoutes);
 console.log('✅ Conversation routes enabled');
 
-// Add conversation routes
-import conversationRoutes from './routes/conversations.js';
-app.use('/api/conversations', conversationRoutes);
-console.log('✅ Conversation routes enabled');
-
 // Add conversation management routes
-import conversationRoutes from './routes/conversations.js';
-app.use('/api/conversations', conversationRoutes);
-console.log('✅ Conversation management routes enabled');
+// Conversation routes already registered above
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
