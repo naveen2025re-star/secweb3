@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import ChatInterface from './ChatInterface'
 import ChatInput from './ChatInput'
+import Header from './Header'
 import {
     checkBackendHealth, analyzeContract, streamAnalysis, getUserConversations, createConversation,
     addMessageToConversation
@@ -11,7 +12,8 @@ import {
  * ChatShell renders the authenticated chat experience.
  * It holds all chat-related hooks and state so that App.jsx doesn't call hooks conditionally.
  */
-const ChatShell = ({ user }) => {
+const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
+  const [darkMode, setDarkMode] = useState(false);
   const [code, setCode] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [messages, setMessages] = useState([])
@@ -408,34 +410,46 @@ const ChatShell = ({ user }) => {
   }
 
   return (
-    <div className="h-screen flex bg-gray-800">
-      {/* Sidebar */}
-      <Sidebar
+    <div className={`h-screen flex flex-col ${darkMode ? 'dark' : ''}`}>
+      {/* Header */}
+      <Header
+        darkMode={darkMode}
+        toggleDarkMode={() => setDarkMode(!darkMode)}
         user={user}
-        conversations={conversations}
-        activeConversation={activeConversation}
-        onNewConversation={handleNewConversation}
-        onSelectConversation={handleSelectConversation}
-        onDeleteConversation={handleDeleteConversation}
-        onRenameConversation={handleRenameConversation}
+        onShowPlans={onShowPlans}
+        onDisconnect={onDisconnect}
       />
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Chat Interface */}
-        <ChatInterface
-          messages={messages}
-          isAnalyzing={analyzing}
-          streamingMessage={streamingMessage}
+      {/* Main Content */}
+      <div className="flex-1 flex bg-gray-800">
+        {/* Sidebar */}
+        <Sidebar
+          user={user}
+          conversations={conversations}
+          activeConversation={activeConversation}
+          onNewConversation={handleNewConversation}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+          onRenameConversation={handleRenameConversation}
         />
 
-        {/* Chat Input */}
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          isAnalyzing={analyzing}
-          code={code}
-          setCode={setCode}
-        />
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Chat Interface */}
+          <ChatInterface
+            messages={messages}
+            isAnalyzing={analyzing}
+            streamingMessage={streamingMessage}
+          />
+
+          {/* Chat Input */}
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            isAnalyzing={analyzing}
+            code={code}
+            setCode={setCode}
+          />
+        </div>
       </div>
     </div>
   )

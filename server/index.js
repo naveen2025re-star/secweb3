@@ -200,6 +200,15 @@ const initializeDatabase = async () => {
     if (isConnected) {
       console.log('🔄 Running database migrations...');
       await createTables();
+
+      // Run plans system migration
+      try {
+        const createPlansSystem = await import('./migrations/002_create_plans_system.js');
+        await createPlansSystem.default();
+      } catch (error) {
+        console.warn('⚠️ Plans system migration skipped:', error.message);
+      }
+
       console.log('✅ Database initialized successfully');
     } else {
       console.error('❌ Failed to connect to database');
@@ -223,8 +232,14 @@ import conversationRoutes from './routes/conversations.js';
 app.use('/api/conversations', conversationRoutes);
 console.log('✅ Conversation routes enabled');
 
-// Add conversation management routes
-// Conversation routes already registered above
+// Add plan routes
+try {
+  const planRoutes = await import('./planRoutes.js');
+  app.use('/api', planRoutes.default);
+  console.log('✅ Plan routes enabled');
+} catch (error) {
+  console.warn('⚠️ Plan routes not available:', error.message);
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
