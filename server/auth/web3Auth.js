@@ -180,10 +180,17 @@ export const verifySignature = async (walletAddress, signature, message) => {
 export const authenticateWeb3Token = async (req, res, next) => {
   try {
     const hdr = req.headers['authorization'];
-    const token = hdr && hdr.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'Access token required' });
+    console.log('🔐 Auth header:', hdr ? 'Present' : 'Missing');
 
+    const token = hdr && hdr.split(' ')[1];
+    if (!token) {
+      console.log('❌ No token provided');
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    console.log('🔍 Verifying token...');
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('✅ Token decoded:', { userId: decoded.userId, wallet: decoded.walletAddress });
 
     const { rows } = await pool.query(
       `SELECT id, wallet_address, ens_name, credits_balance
@@ -191,11 +198,16 @@ export const authenticateWeb3Token = async (req, res, next) => {
       [decoded.userId]
     );
 
-    if (!rows.length) return res.status(401).json({ error: 'Invalid token' });
+    if (!rows.length) {
+      console.log('❌ User not found for token');
+      return res.status(401).json({ error: 'Invalid token' });
+    }
 
+    console.log('✅ User authenticated:', rows[0].wallet_address);
     req.user = rows[0];
     next();
   } catch (e) {
+    console.log('❌ Token verification failed:', e.message);
     return res.status(403).json({ error: 'Invalid or expired token' });
   }
 };

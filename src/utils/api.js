@@ -5,7 +5,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefin
 
 // Get auth token from localStorage
 const getAuthToken = () => {
-  return localStorage.getItem('secweb3_token')
+  // Try both possible token keys for compatibility
+  return localStorage.getItem('secweb3_token') || localStorage.getItem('auth_token')
 }
 
 // Create authenticated headers

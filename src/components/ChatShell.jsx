@@ -32,11 +32,19 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
   // Load user plan and credits
   const loadUserPlan = async () => {
     try {
-      const apiModule = await import('../utils/api');
-      const planData = await apiModule.getUserPlan();
-      if (planData) {
+      const response = await fetch('/api/plans/current', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
+        }
+      });
+
+      if (response.ok) {
+        const planData = await response.json();
         setUserPlan(planData.plan);
         setCreditsBalance(planData.creditsBalance);
+      } else {
+        console.warn('Failed to load user plan:', response.status);
       }
     } catch (error) {
       console.warn('Failed to load user plan:', error);
