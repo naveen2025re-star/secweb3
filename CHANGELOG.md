@@ -5,6 +5,113 @@ All notable changes to SecWeb3 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-01-12
+
+### Added - Credit System & Plan Management
+- **Comprehensive Credit System**: Implemented usage-based credit system for scan operations
+  - Dynamic cost calculation based on file size and language complexity
+  - Language multipliers: Solidity (1.0x), Vyper (1.2x), Move (1.5x), Cairo (1.8x)
+  - Real-time credit balance tracking and updates
+  - Atomic credit deduction to prevent race conditions
+- **Multi-Tier Plan System**: 
+  - **Free Plan**: 100 credits, 50 credits/scan limit, 5 files/scan
+  - **Pro Plan**: 1000 monthly credits, 200 credits/scan limit, 20 files/scan ($29/month)
+  - **Custom Plan**: 5000+ monthly credits, 1000+ credits/scan limit, 100+ files/scan
+- **Plan Management Features**:
+  - Real-time cost estimation before scans
+  - Plan upgrade request system with contact forms
+  - Monthly credit reset for Pro/Custom plans
+  - Plan-based feature restrictions and validation
+- **Enhanced UI Components**:
+  - Credit balance display in header with upgrade prompts
+  - Cost estimation preview in code editor
+  - Plans modal with detailed feature comparison
+  - Upgrade request forms for Pro and Custom plans
+
+### Added - Authentication & Security Improvements
+- **Robust Web3 Authentication**:
+  - Direct JWT implementation bypassing import dependencies
+  - Consistent JWT secret management across modules
+  - Enhanced signature verification with multiple message formats
+  - Fallback user lookup mechanisms (by ID and wallet address)
+- **Session Management**:
+  - 24-hour session expiration with automatic renewal
+  - Secure token storage with multiple key compatibility
+  - Session invalidation on logout with database cleanup
+- **Error Handling & Logging**:
+  - Comprehensive debug endpoints for authentication testing
+  - Detailed error messages for plan limit violations
+  - Non-blocking credit estimation with graceful fallbacks
+  - Enhanced middleware logging for troubleshooting
+
+### Added - Database & Backend Enhancements
+- **Plan System Database Schema**:
+  - Plans table with detailed configuration (credits, limits, pricing, features)
+  - Upgrade requests table for Pro/Custom plan inquiries
+  - UUID/INTEGER compatibility for existing user systems
+  - Foreign key constraints with proper error handling
+- **Credit Management**:
+  - Atomic credit deduction with row-level locking
+  - Credit history tracking with timestamps
+  - Monthly credit reset automation for subscription plans
+  - Plan validation middleware for scan operations
+- **API Endpoints**:
+  - `/api/plans/current` - Get user's current plan and credit balance
+  - `/api/plans/estimate-cost` - Real-time scan cost estimation
+  - `/api/plans/upgrade-request` - Submit plan upgrade requests
+  - `/api/plans` - List all available plans with features
+
+### Enhanced - User Experience
+- **Smart Contract Analysis**:
+  - Credit cost preview before scan execution
+  - Plan-aware scan limitations with upgrade prompts
+  - Non-blocking analysis flow with credit validation
+  - Enhanced error messages for insufficient credits/plan limits
+- **Responsive Design**:
+  - Mobile-optimized credit display and plan selection
+  - Improved cost estimation UI in code editor
+  - Streamlined upgrade process with progress indicators
+- **Performance Optimizations**:
+  - Throttled streaming message updates (300ms intervals)
+  - Memoized chat components to prevent unnecessary re-renders
+  - Optimized scroll behavior with conditional updates
+  - Reduced API calls with intelligent caching
+
+### Fixed - Critical Issues
+- **Authentication Flow**:
+  - Resolved 403 Forbidden errors on authenticated endpoints
+  - Fixed JWT token verification with consistent secrets
+  - Eliminated import path conflicts causing module loading failures
+  - Corrected token storage/retrieval with proper key management
+- **UI Stability**:
+  - Fixed chat interface flickering and excessive scrolling
+  - Resolved streaming message update loops causing performance issues
+  - Eliminated missing function errors in dynamic imports
+  - Fixed credit estimation blocking scan operations
+- **Database Compatibility**:
+  - Resolved UUID vs INTEGER foreign key conflicts
+  - Fixed plan assignment for new user creation
+  - Corrected database schema migrations with proper error handling
+  - Enhanced user lookup with fallback mechanisms
+
+### Changed - Architecture Improvements
+- **Modular Authentication**: Restructured auth system with direct implementations to avoid dependency issues
+- **Credit System Integration**: Layered credit validation into existing scan flow without breaking core functionality
+- **Error-Resistant Design**: Implemented comprehensive fallback mechanisms for all critical operations
+- **API Response Structure**: Standardized error responses with detailed plan/credit information
+
+### Security Enhancements
+- **JWT Token Security**: Enhanced token validation with expiration handling and format verification
+- **Input Validation**: Strengthened file upload validation and content sanitization
+- **Rate Limiting**: Implemented credit-based usage controls with plan enforcement
+- **Session Security**: Improved session management with automatic cleanup and renewal
+
+### Developer Experience
+- **Debug Tools**: Added comprehensive debug endpoints for authentication and plan testing
+- **Error Logging**: Enhanced logging with detailed error context and resolution hints
+- **Documentation**: Updated API documentation with credit system endpoints and examples
+- **Testing**: Added authentication flow testing and credit system validation
+
 ## [2.0.0] - 2025-01-17
 
 ### 🎨 Major UI/UX Redesign
