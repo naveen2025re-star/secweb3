@@ -1,6 +1,33 @@
 import express from 'express';
-import { authenticateWeb3Token } from '../auth/web3Auth.js';
+import jwt from 'jsonwebtoken';
 import { pool } from '../database.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key';
+
+// Direct auth middleware to avoid import issues
+const authenticateWeb3Token = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.userId]);
+
+    if (!result.rows.length) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    req.user = result.rows[0];
+    next();
+  } catch (error) {
+    console.error('Auth error:', error.message);
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+};
 
 const router = express.Router();
 

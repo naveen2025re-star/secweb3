@@ -3,9 +3,11 @@ import jwt from 'jsonwebtoken';
 import { ethers } from 'ethers';
 import { pool } from '../database.js';
 
-// JWT
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// JWT - ensure consistency with main server
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+console.log('🔐 Auth module JWT_SECRET:', JWT_SECRET ? 'Present' : 'Missing');
 
 // Lazy-load plan utilities with safe fallbacks
 let planUtilsPromise = null;
@@ -180,7 +182,8 @@ export const verifySignature = async (walletAddress, signature, message) => {
 export const authenticateWeb3Token = async (req, res, next) => {
   try {
     const hdr = req.headers['authorization'];
-    console.log('🔐 Auth header:', hdr ? 'Present' : 'Missing');
+    console.log('🔐 Auth middleware hit:', req.path);
+    console.log('🔐 Auth header:', hdr ? `Bearer ${hdr.split(' ')[1]?.substring(0, 10)}...` : 'Missing');
 
     const token = hdr && hdr.split(' ')[1];
     if (!token) {
@@ -188,27 +191,67 @@ export const authenticateWeb3Token = async (req, res, next) => {
       return res.status(401).json({ error: 'Access token required' });
     }
 
-    console.log('🔍 Verifying token...');
+    console.log('🔍 Verifying token with secret:', JWT_SECRET?.substring(0, 10) + '...');
     const decoded = jwt.verify(token, JWT_SECRET);
-    console.log('✅ Token decoded:', { userId: decoded.userId, wallet: decoded.walletAddress });
+    console.log('✅ Token decoded:', { 
+      userId: decoded.userId, 
+      wallet: decoded.walletAddress,
+      exp: new Date(decoded.exp * 1000).toISOString()
+    });
 
+    // More robust user lookup
     const { rows } = await pool.query(
-      `SELECT id, wallet_address, ens_name, credits_balance
+      `SELECT id, wallet_address, ens_name, credits_balance, created_at
        FROM users WHERE id = $1`,
       [decoded.userId]
     );
 
     if (!rows.length) {
-      console.log('❌ User not found for token');
-      return res.status(401).json({ error: 'Invalid token' });
+      console.log('❌ User not found in database for userId:', decoded.userId);
+      // Try looking up by wallet address as fallback
+      const fallbackRows = await pool.query(
+        `SELECT id, wallet_address, ens_name, credits_balance, created_at
+         FROM users WHERE wallet_address = $1`,
+        [decoded.walletAddress?.toLowerCase()]
+      );
+
+      if (fallbackRows.length) {
+        console.log('✅ User found by wallet address fallback');
+        req.user = fallbackRows.rows[0];
+        return next();
+      }
+
+      return res.status(401).json({ 
+        error: 'User not found',
+        details: { userId: decoded.userId, wallet: decoded.walletAddress }
+      });
     }
 
-    console.log('✅ User authenticated:', rows[0].wallet_address);
+    console.log('✅ User authenticated:', {
+      id: rows[0].id,
+      wallet: rows[0].wallet_address,
+      credits: rows[0].credits_balance
+    });
     req.user = rows[0];
     next();
   } catch (e) {
-    console.log('❌ Token verification failed:', e.message);
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    console.log('❌ Token verification failed:', {
+      error: e.message,
+      name: e.name,
+      path: req.path
+    });
+
+    if (e.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired', expiredAt: e.expiredAt });
+    }
+    if (e.name === 'JsonWebTokenError') {
+      return res.status(403).json({ error: 'Invalid token format' });
+    }
+
+    return res.status(403).json({ 
+      error: 'Token verification failed',
+      details: e.message 
+    });
   }
 };
 

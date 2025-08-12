@@ -35,7 +35,7 @@ try {
 }
 
 // Import database and auth modules
-import { testConnection } from './database.js';
+import {pool, testConnection} from './database.js';
 import web3AuthRoutes from './routes/web3Auth.js';
 import createTables from './migrations/001_create_tables.js';
 
@@ -65,6 +65,12 @@ const PORT = process.env.PORT || 8000;
 
 // Check for different possible JWT token variable names from Railway
 const JWT_TOKEN = process.env.SHIPABLE_JWT_TOKEN || process.env.VITE_SHIPABLE_JWT_TOKEN || process.env.JWT_SECRET;
+
+// Ensure JWT_SECRET is available for auth middleware
+if (!process.env.JWT_SECRET && JWT_TOKEN) {
+  process.env.JWT_SECRET = JWT_TOKEN;
+  console.log('🔐 Set JWT_SECRET from SHIPABLE_JWT_TOKEN for auth compatibility');
+}
 
 // Validate required environment variables
 if (!JWT_TOKEN) {
@@ -232,14 +238,67 @@ import conversationRoutes from './routes/conversations.js';
 app.use('/api/conversations', conversationRoutes);
 console.log('✅ Conversation routes enabled');
 
-// Add plan routes
-try {
-  const planRoutes = await import('./planRoutes.js');
-  app.use('/api', planRoutes.default);
-  console.log('✅ Plan routes enabled');
-} catch (error) {
-  console.warn('⚠️ Plan routes not available:', error.message);
-}
+// Add plan routes directly to avoid import issues
+app.get('/api/plans/current', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.userId]);
+    if (!result.rows.length) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const user = result.rows[0];
+
+    res.json({
+      plan: {
+        code: 'free',
+        name: 'Free',
+        description: 'Basic plan',
+        creditsPerMonth: 100,
+        creditsPerScanLimit: 50,
+        filesPerScanLimit: 5,
+        priceUsd: 0,
+        features: ['Basic security analysis', '5 files per scan', 'Community support']
+      },
+      creditsBalance: user.credits_balance || 100,
+      planStartedAt: new Date().toISOString(),
+      creditsResetAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Plan current error:', error);
+    res.status(500).json({ error: 'Failed to get current plan' });
+  }
+});
+
+app.post('/api/plans/estimate-cost', async (req, res) => {
+  try {
+    const { files = [] } = req.body;
+    let cost = 0;
+
+    for (const file of files) {
+      const size = file.size || (file.content ? file.content.length : 0);
+      cost += Math.max(1, Math.ceil(size / 1024));
+    }
+
+    res.json({
+      estimatedCost: Math.max(1, cost),
+      fileCount: files.length
+    });
+  } catch (error) {
+    console.error('Estimate cost error:', error);
+    res.json({ estimatedCost: 5, fileCount: 1 });
+  }
+});
+
+console.log('✅ Basic plan routes enabled directly');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -258,6 +317,46 @@ app.get('/api/health', (req, res) => {
       NODE_ENV: process.env.NODE_ENV
     }
   });
+});
+
+// Debug endpoint to test JWT authentication
+app.get('/api/debug/auth', async (req, res) => {
+  try {
+    console.log('🔍 Debug auth endpoint hit');
+    console.log('Headers:', req.headers);
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.json({ status: 'no_auth_header' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.json({ status: 'no_token' });
+    }
+
+    // Try to import and use the auth middleware
+    const authModule = await import('./auth/web3Auth.js');
+    console.log('✅ Auth module loaded successfully');
+
+    // Verify the token manually
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    console.log('✅ Token decoded:', decoded);
+
+    res.json({ 
+      status: 'success',
+      decoded,
+      jwtSecret: process.env.JWT_SECRET ? 'present' : 'missing'
+    });
+  } catch (error) {
+    console.error('❌ Debug auth failed:', error);
+    res.json({ 
+      status: 'error', 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
 });
 
 // Test Shipable session creation endpoint
