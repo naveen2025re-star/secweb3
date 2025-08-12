@@ -190,22 +190,30 @@ export const useWeb3Auth = () => {
           });
 
           if (response.ok) {
-            const { user: userData } = await response.json();
-            const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-            const web3Signer = web3Provider.getSigner();
+            const responseData = await response.json();
+            const userData = responseData?.user;
 
-            setProvider(web3Provider);
-            setSigner(web3Signer);
-            setAccount(accounts[0]);
-            setIsConnected(true);
-            setUser(userData);
+            if (userData && accounts[0]) {
+              const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+              const web3Signer = web3Provider.getSigner();
 
-            // Get ENS name
-            try {
-              const ens = await web3Provider.lookupAddress(accounts[0]);
-              setEnsName(ens);
-            } catch (ensError) {
-              setEnsName(null);
+              setProvider(web3Provider);
+              setSigner(web3Signer);
+              setAccount(accounts[0]);
+              setIsConnected(true);
+              setUser(userData);
+
+              // Get ENS name
+              try {
+                const ens = await web3Provider.lookupAddress(accounts[0]);
+                setEnsName(ens);
+              } catch (ensError) {
+                setEnsName(null);
+              }
+            } else {
+              console.error('Invalid user data received:', responseData);
+              localStorage.removeItem('secweb3_token');
+              setToken(null);
             }
           } else {
             // Token invalid, clear it

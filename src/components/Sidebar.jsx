@@ -16,7 +16,14 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
   }
 
   const formatAddress = (address) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
+    if (!address || typeof address !== 'string' || address.length < 10) {
+      return 'Unknown Address';
+    }
+    try {
+      return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    } catch {
+      return 'Invalid Address';
+    }
   }
 
   const formatTime = (timestamp) => {
@@ -89,15 +96,15 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-white truncate">
-                  {user.ensName || formatAddress(user.walletAddress)}
+                  {user?.ensName || (user?.walletAddress ? formatAddress(user.walletAddress) : 'Unknown User')}
                 </p>
                 <div className="flex items-center space-x-2">
                   <p className="text-xs text-gray-400">
-                    {user.subscriptionTier || 'Free'}
+                    {user?.subscriptionTier || 'Free'}
                   </p>
                   <span className="text-gray-500">•</span>
                   <p className="text-xs text-gray-400">
-                    {user.apiCallsCount || 0}/{user.apiCallsLimit || 100} calls
+                    {user?.apiCallsCount || 0}/{user?.apiCallsLimit || 100} calls
                   </p>
                 </div>
               </div>

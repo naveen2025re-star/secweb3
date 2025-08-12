@@ -53,7 +53,9 @@ const Web3Auth = ({
   };
 
   const formatAddress = (address) => {
-    if (typeof address !== 'string') return '';
+    if (!address || typeof address !== 'string' || address.length < 8) {
+      return '';
+    }
     try {
       return `${address.slice(0, 6)}...${address.slice(-4)}`;
     } catch {
@@ -172,10 +174,10 @@ const Web3Auth = ({
         </div>
         <div className="hidden md:block">
           <p className="text-sm font-medium text-white">
-            {user?.ensName || (user?.walletAddress ? formatAddress(user.walletAddress) : '')}
+            {user?.ensName || (user?.walletAddress ? formatAddress(user.walletAddress) : 'Unknown User')}
           </p>
           <p className="text-xs text-gray-400">
-            {user.apiCallsCount}/{user.apiCallsLimit} API calls
+            {user?.apiCallsCount || 0}/{user?.apiCallsLimit || 0} API calls
           </p>
         </div>
       </div>
