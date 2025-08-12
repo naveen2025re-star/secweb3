@@ -332,6 +332,19 @@ app.post('/api/analyze', async (req, res) => {
     const language = detectContractLanguage(code, filename);
     const lineCount = code.split('\n').length;
 
+    // Optional: Basic usage tracking (non-blocking)
+    try {
+      const authHeader = req.headers['authorization'];
+      if (authHeader) {
+        const token = authHeader.split(' ')[1];
+        console.log('📊 Tracking usage for authenticated scan:', { language, lineCount });
+        // Future: Add basic credit deduction here when plan system is stable
+      }
+    } catch (trackingError) {
+      // Never block scans for tracking errors
+      console.warn('Usage tracking failed (non-blocking):', trackingError.message);
+    }
+
     console.log(`[${new Date().toISOString()}] Creating Shipable session for ${language} contract analysis: ${lineCount} lines`);
 
     // Create session via Shipable API

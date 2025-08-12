@@ -132,8 +132,8 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
     }
     setMessages(prev => [...prev, userMessage])
 
-    // Save user message to database
-    if (conversationId) {
+    // Save user message to database with error handling
+    if (conversationId && !String(conversationId).startsWith('local_')) {
       try {
         await addMessageToConversation(
           conversationId, 
@@ -143,38 +143,35 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
         )
       } catch (error) {
         console.error('Failed to save user message:', error)
+        // Continue without blocking the analysis
       }
     }
 
-    // Message persisted above via addMessageToConversation
-
     try {
-      // Step 1: Create session directly with Shipable API
+      // Step 1: Create session
       const sessionData = await analyzeContract(contractCode, contractCode ? 'contract.sol' : undefined)
 
       if (!sessionData.success || !sessionData.sessionKey) {
-        throw new Error('Invalid session response from Shipable API')
+        throw new Error('Failed to create analysis session')
       }
 
-      const sessionKey = sessionData.sessionKey
-
-      // Step 2: Start streaming analysis directly with Shipable API
-      const streamResponse = await streamAnalysis(sessionKey, message, contractCode)
+      // Step 2: Start streaming
+      const streamResponse = await streamAnalysis(sessionData.sessionKey, message, contractCode)
 
       if (!streamResponse.body) {
-        throw new Error('No response body received from Shipable API')
+        throw new Error('No response body received')
       }
 
-      // Step 3: Handle streaming response with optimized updates
+      // Step 3: Handle streaming with throttled updates
       const reader = streamResponse.body.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
-      let updateCounter = 0
+      let lastUpdateTime = 0
+      const UPDATE_THROTTLE = 300 // Update every 300ms max
 
       try {
         while (true) {
           const { done, value } = await reader.read()
-
           if (done) break
 
           const chunk = decoder.decode(value)
@@ -188,31 +185,27 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
                 setAnalyzing(false)
                 setStreamingMessage('')
 
-                // Add final message
                 const aiMessage = {
                   id: Date.now() + 1,
                   type: 'ai',
                   content: fullContent,
-                  timestamp: new Date().toLocaleTimeString(),
-                  streaming: false
+                  timestamp: new Date().toLocaleTimeString()
                 }
                 setMessages(prev => [...prev, aiMessage])
 
-                // Save AI message to database
-                if (conversationId) {
+                // Save final message
+                if (conversationId && !String(conversationId).startsWith('local_')) {
                   try {
                     await addMessageToConversation(
                       conversationId,
                       'assistant',
                       fullContent,
-                      { sessionKey, analysis: true }
+                      { sessionKey: sessionData.sessionKey }
                     )
                   } catch (error) {
                     console.error('Failed to save AI message:', error)
                   }
                 }
-
-                // Message persisted above via addMessageToConversation
                 return
               }
 
@@ -221,56 +214,38 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
                   const parsed = JSON.parse(data)
                   if (parsed.body) {
                     fullContent += parsed.body
-                    updateCounter++
 
-                    // Update streaming message every 3 chunks to reduce blinking
-                    if (updateCounter % 3 === 0) {
+                    // Throttled UI updates to prevent flickering
+                    const now = Date.now()
+                    if (now - lastUpdateTime > UPDATE_THROTTLE) {
                       setStreamingMessage(fullContent)
+                      lastUpdateTime = now
                     }
                   }
                 } catch {
-                  // ignore parse errors for partial SSE chunks
+                  // Ignore parse errors
                 }
               }
             }
           }
         }
 
-        // If we reach here, stream ended naturally
+        // Stream ended without [DONE]
         setAnalyzing(false)
         setStreamingMessage('')
 
-        // Add final message
         const aiMessage = {
           id: Date.now() + 1,
           type: 'ai',
           content: fullContent,
-          timestamp: new Date().toLocaleTimeString(),
-          streaming: false
+          timestamp: new Date().toLocaleTimeString()
         }
         setMessages(prev => [...prev, aiMessage])
 
-        // Persist AI message to the database (covers cases where no "[DONE]" is sent)
-        if (conversationId && !String(conversationId).startsWith('local_')) {
-          try {
-            await addMessageToConversation(
-              conversationId,
-              'assistant',
-              fullContent,
-              { sessionKey, analysis: true }
-            )
-          } catch (error) {
-            console.error('Failed to save AI message (natural end):', error)
-          }
-        }
-
       } catch (streamError) {
-        try {
-          reader.releaseLock()
-        } catch {
-          // ignore
-        }
         throw streamError
+      } finally {
+        try { reader.releaseLock() } catch {}
       }
 
     } catch (error) {
@@ -280,7 +255,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
       const errorMessage = {
         id: Date.now() + 2,
         type: 'ai',
-        content: `❌ **Analysis Failed**\n\nError: ${error.message}\n\nPlease try again.`,
+        content: `❌ **Analysis Failed**\n\n${error.message}\n\nPlease try again.`,
         timestamp: new Date().toLocaleTimeString(),
         error: true
       }
