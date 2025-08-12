@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateWeb3Token } from '../web3Auth.js';
+import { authenticateWeb3Token } from '../auth/web3Auth.js';
 import { pool } from '../database.js';
 
 const router = express.Router();
