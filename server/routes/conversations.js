@@ -148,6 +148,38 @@ router.post('/:id/messages', authenticateWeb3Token, async (req, res) => {
   }
 });
 
+// Update conversation title
+router.put('/:id', authenticateWeb3Token, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE conversations 
+       SET title = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND user_id = $3
+       RETURNING *`,
+      [title.trim(), id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json({
+      success: true,
+      conversation: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update conversation error:', error);
+    res.status(500).json({ error: 'Failed to update conversation' });
+  }
+});
+
 // Delete conversation
 router.delete('/:id', authenticateWeb3Token, async (req, res) => {
   try {

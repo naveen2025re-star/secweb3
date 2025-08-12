@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import ChatInterface from './ChatInterface'
 import ChatInput from './ChatInput'
-import { checkBackendHealth, analyzeContract, streamAnalysis } from '../utils/api'
+import {
+    checkBackendHealth, analyzeContract, streamAnalysis, getUserConversations, saveConversation,
+    addMessageToConversation
+} from '../utils/api'
 
 /**
  * ChatShell renders the authenticated chat experience.
@@ -14,27 +17,13 @@ const ChatShell = ({ user }) => {
   const [messages, setMessages] = useState([])
   const [streamingMessage, setStreamingMessage] = useState('')
   const [backendHealth, setBackendHealth] = useState({ healthy: false, checking: true })
+  const [loadingConversations, setLoadingConversations] = useState(true)
 
   // Conversation management
-  const [conversations, setConversations] = useState([
-    {
-      id: '1',
-      title: 'Welcome to SecWeb3',
-      timestamp: Date.now() - 3600000,
-      messages: [],
-      userId: user?.id
-    },
-    {
-      id: '2',
-      title: 'Smart Contract Analysis',
-      timestamp: Date.now() - 7200000,
-      messages: [],
-      userId: user?.id
-    }
-  ])
-  const [activeConversation, setActiveConversation] = useState('1')
+  const [conversations, setConversations] = useState([])
+  const [activeConversation, setActiveConversation] = useState(null)
 
-  // Check backend health on component mount
+  // Check backend health and load conversations on component mount
   useEffect(() => {
     const checkHealth = async () => {
       try {
@@ -45,12 +34,78 @@ const ChatShell = ({ user }) => {
       }
     }
 
+    const loadConversations = async () => {
+      try {
+        setLoadingConversations(true)
+        const response = await getUserConversations()
+
+        if (response.success && response.conversations) {
+          const formattedConversations = response.conversations.map(conv => ({
+            id: conv.id,
+            title: conv.title,
+            timestamp: new Date(conv.updated_at).getTime(),
+            messageCount: conv.message_count || 0,
+            userId: conv.user_id
+          }))
+
+          setConversations(formattedConversations)
+
+          // Set active conversation to the first one or create a new one
+          if (formattedConversations.length > 0) {
+            setActiveConversation(formattedConversations[0].id)
+            await loadConversationMessages(formattedConversations[0].id)
+          } else {
+            // Create welcome conversation for new users
+            handleNewConversation()
+          }
+        } else {
+          // Create welcome conversation if no conversations exist
+          handleNewConversation()
+        }
+      } catch (error) {
+        console.error('Failed to load conversations:', error)
+        // Create welcome conversation as fallback
+        handleNewConversation()
+      } finally {
+        setLoadingConversations(false)
+      }
+    }
+
     checkHealth()
+    loadConversations()
 
     // Check health every 30 seconds
     const healthInterval = setInterval(checkHealth, 30000)
     return () => clearInterval(healthInterval)
-  }, [])
+  }, [user])
+
+  // Load messages for a specific conversation
+  const loadConversationMessages = async (conversationId) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.conversation.messages) {
+          const formattedMessages = data.conversation.messages.map(msg => ({
+            id: msg.id,
+            type: msg.role === 'assistant' ? 'ai' : 'user',
+            content: msg.content,
+            timestamp: new Date(msg.created_at).toLocaleTimeString(),
+            code: msg.metadata?.code || null
+          }))
+          setMessages(formattedMessages)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load conversation messages:', error)
+      setMessages([])
+    }
+  }
 
   const handleSendMessage = async (message, contractCode = '') => {
     if (!message.trim() && !contractCode.trim()) return
@@ -58,6 +113,13 @@ const ChatShell = ({ user }) => {
 
     setAnalyzing(true)
     setStreamingMessage('')
+
+    // Create conversation if none exists
+    let conversationId = currentConversationId
+    if (!conversationId) {
+      await handleNewConversation()
+      conversationId = activeConversation
+    }
 
     // Add user message immediately
     const userMessage = {
@@ -68,6 +130,40 @@ const ChatShell = ({ user }) => {
       code: contractCode
     }
     setMessages(prev => [...prev, userMessage])
+
+    // Save user message to database
+    if (conversationId) {
+      try {
+        await addMessageToConversation(
+          conversationId, 
+          'user', 
+          message, 
+          { code: contractCode }
+        )
+      } catch (error) {
+        console.error('Failed to save user message:', error)
+      }
+    }
+
+    // Save user message to database
+    if (activeConversation && !activeConversation.startsWith('local_')) {
+      try {
+        await fetch(`/api/conversations/${activeConversation}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
+          },
+          body: JSON.stringify({
+            role: 'user',
+            content: message,
+            metadata: { code: contractCode }
+          })
+        })
+      } catch (error) {
+        console.error('Failed to save user message:', error)
+      }
+    }
 
     try {
       // Step 1: Create session directly with Shipable API
@@ -118,6 +214,40 @@ const ChatShell = ({ user }) => {
                   streaming: false
                 }
                 setMessages(prev => [...prev, aiMessage])
+
+                // Save AI message to database
+                if (conversationId) {
+                  try {
+                    await addMessageToConversation(
+                      conversationId,
+                      'assistant',
+                      fullContent,
+                      { sessionKey, analysis: true }
+                    )
+                  } catch (error) {
+                    console.error('Failed to save AI message:', error)
+                  }
+                }
+
+                // Save AI message to database
+                if (activeConversation && !activeConversation.startsWith('local_')) {
+                  try {
+                    await fetch(`/api/conversations/${activeConversation}/messages`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
+                      },
+                      body: JSON.stringify({
+                        role: 'assistant',
+                        content: fullContent,
+                        metadata: {}
+                      })
+                    })
+                  } catch (error) {
+                    console.error('Failed to save AI message:', error)
+                  }
+                }
                 return
               }
 
@@ -179,23 +309,125 @@ const ChatShell = ({ user }) => {
     }
   }
 
-  const handleNewConversation = () => {
-    const newConversation = {
-      id: Date.now().toString(),
-      title: `SecWeb3 Analysis ${conversations.length + 1}`,
-      timestamp: Date.now(),
-      messages: []
+  const handleNewConversation = async () => {
+    try {
+      const newTitle = `Smart Contract Analysis ${new Date().toLocaleDateString()}`
+
+      const response = await saveConversation({
+        title: newTitle,
+        messages: []
+      })
+
+      if (response.success && response.conversation) {
+        const newConversation = {
+          id: response.conversation.id,
+          title: response.conversation.title,
+          timestamp: new Date(response.conversation.created_at).getTime(),
+          messageCount: 0,
+          userId: response.conversation.user_id
+        }
+
+        setConversations(prev => [newConversation, ...prev])
+        setActiveConversation(newConversation.id)
+        setMessages([])
+        setCode('')
+      } else {
+        // Fallback to local conversation if save fails
+        const fallbackConversation = {
+          id: `local_${Date.now()}`,
+          title: newTitle,
+          timestamp: Date.now(),
+          messageCount: 0,
+          userId: user?.id
+        }
+        setConversations(prev => [fallbackConversation, ...prev])
+        setActiveConversation(fallbackConversation.id)
+        setMessages([])
+        setCode('')
+      }
+    } catch (error) {
+      console.error('Failed to create new conversation:', error)
+      // Fallback to local conversation
+      const fallbackConversation = {
+        id: `local_${Date.now()}`,
+        title: `Smart Contract Analysis ${new Date().toLocaleDateString()}`,
+        timestamp: Date.now(),
+        messageCount: 0,
+        userId: user?.id
+      }
+      setConversations(prev => [fallbackConversation, ...prev])
+      setActiveConversation(fallbackConversation.id)
+      setMessages([])
+      setCode('')
     }
-    setConversations(prev => [newConversation, ...prev])
-    setActiveConversation(newConversation.id)
-    setMessages([])
-    setCode('')
   }
 
-  const handleSelectConversation = (conversationId) => {
+  const handleSelectConversation = async (conversationId) => {
     setActiveConversation(conversationId)
-    // In a real app, you'd load the conversation messages here
-    setMessages([])
+    await loadConversationMessages(conversationId)
+  }
+
+  const handleDeleteConversation = async (conversationId) => {
+    try {
+      // Delete from database
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
+        }
+      })
+
+      if (response.ok) {
+        // Remove from local state
+        setConversations(prev => prev.filter(conv => conv.id !== conversationId))
+
+        // If deleting active conversation, switch to first remaining conversation
+        if (activeConversation === conversationId) {
+          const remaining = conversations.filter(conv => conv.id !== conversationId)
+          if (remaining.length > 0) {
+            setActiveConversation(remaining[0].id)
+            await loadConversationMessages(remaining[0].id)
+          } else {
+            await handleNewConversation()
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error)
+      // Still remove from local state even if API fails
+      setConversations(prev => prev.filter(conv => conv.id !== conversationId))
+    }
+  }
+
+  const handleRenameConversation = async (conversationId, newTitle) => {
+    try {
+      // Update in database
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('secweb3_token')}`
+        },
+        body: JSON.stringify({ title: newTitle })
+      })
+
+      if (response.ok) {
+        // Update local state
+        setConversations(prev => prev.map(conv => 
+          conv.id === conversationId 
+            ? { ...conv, title: newTitle }
+            : conv
+        ))
+      }
+    } catch (error) {
+      console.error('Failed to rename conversation:', error)
+      // Still update local state even if API fails
+      setConversations(prev => prev.map(conv => 
+        conv.id === conversationId 
+          ? { ...conv, title: newTitle }
+          : conv
+      ))
+    }
   }
 
   return (
@@ -207,6 +439,8 @@ const ChatShell = ({ user }) => {
         activeConversation={activeConversation}
         onNewConversation={handleNewConversation}
         onSelectConversation={handleSelectConversation}
+        onDeleteConversation={handleDeleteConversation}
+        onRenameConversation={handleRenameConversation}
       />
 
       {/* Main Chat Area */}

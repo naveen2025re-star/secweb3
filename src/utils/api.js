@@ -211,29 +211,7 @@ export const getUserProfile = async () => {
   }
 }
 
-// Save conversation
-export const saveConversation = async (conversation) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/conversations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
-      body: JSON.stringify(conversation)
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to save conversation: ${response.status}`)
-    }
-
-    return await response.json()
-  } catch (error) {
-    console.error('Failed to save conversation:', error)
-    // Don't throw error to avoid breaking the app
-    return { success: false, error: error.message }
-  }
-}
+// Conversation API functions
 
 // Get user conversations
 export const getUserConversations = async () => {
@@ -254,6 +232,118 @@ export const getUserConversations = async () => {
     console.error('Failed to get conversations:', error)
     // Return empty array to avoid breaking the app
     return { success: false, conversations: [] }
+  }
+}
+
+// Create new conversation
+export const createConversation = async (title, messages = []) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify({ title, messages })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to create conversation: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to create conversation:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Get conversation with messages
+export const getConversation = async (conversationId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get conversation: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to get conversation:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Add message to conversation
+export const addMessageToConversation = async (conversationId, role, content, metadata = {}) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify({ role, content, metadata })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to add message: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to add message:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Update conversation title
+export const updateConversationTitle = async (conversationId, title) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify({ title })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to update conversation: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to update conversation:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Delete conversation
+export const deleteConversation = async (conversationId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete conversation: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to delete conversation:', error)
+    return { success: false, error: error.message }
   }
 }
 
