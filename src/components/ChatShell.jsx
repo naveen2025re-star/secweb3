@@ -3,7 +3,7 @@ import Sidebar from './Sidebar'
 import ChatInterface from './ChatInterface'
 import ChatInput from './ChatInput'
 import {
-    checkBackendHealth, analyzeContract, streamAnalysis, getUserConversations, saveConversation,
+    checkBackendHealth, analyzeContract, streamAnalysis, getUserConversations, createConversation,
     addMessageToConversation
 } from '../utils/api'
 
@@ -115,10 +115,9 @@ const ChatShell = ({ user }) => {
     setStreamingMessage('')
 
     // Create conversation if none exists
-    let conversationId = currentConversationId
+    let conversationId = activeConversation
     if (!conversationId) {
-      await handleNewConversation()
-      conversationId = activeConversation
+      conversationId = await handleNewConversation()
     }
 
     // Add user message immediately
@@ -313,10 +312,7 @@ const ChatShell = ({ user }) => {
     try {
       const newTitle = `Smart Contract Analysis ${new Date().toLocaleDateString()}`
 
-      const response = await saveConversation({
-        title: newTitle,
-        messages: []
-      })
+      const response = await createConversation(newTitle, [])
 
       if (response.success && response.conversation) {
         const newConversation = {
@@ -331,6 +327,7 @@ const ChatShell = ({ user }) => {
         setActiveConversation(newConversation.id)
         setMessages([])
         setCode('')
+        return newConversation.id
       } else {
         // Fallback to local conversation if save fails
         const fallbackConversation = {
@@ -344,6 +341,7 @@ const ChatShell = ({ user }) => {
         setActiveConversation(fallbackConversation.id)
         setMessages([])
         setCode('')
+        return fallbackConversation.id
       }
     } catch (error) {
       console.error('Failed to create new conversation:', error)
@@ -359,6 +357,7 @@ const ChatShell = ({ user }) => {
       setActiveConversation(fallbackConversation.id)
       setMessages([])
       setCode('')
+      return fallbackConversation.id
     }
   }
 
