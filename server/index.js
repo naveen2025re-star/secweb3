@@ -38,7 +38,6 @@ try {
 import { testConnection } from './database.js';
 import web3AuthRoutes from './routes/web3Auth.js';
 import createTables from './migrations/001_create_tables.js';
-import process from "react-syntax-highlighter/.eslintrc.js";
 
 // __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -64,19 +63,28 @@ console.log('🔍 Environment loading result:', result.error ? result.error.mess
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+// Check for different possible JWT token variable names from Railway
+const JWT_TOKEN = process.env.SHIPABLE_JWT_TOKEN || process.env.VITE_SHIPABLE_JWT_TOKEN || process.env.JWT_SECRET;
+
 // Validate required environment variables
-if (!process.env.SHIPABLE_JWT_TOKEN) {
-  console.error('❌ SHIPABLE_JWT_TOKEN is required but not found in environment variables');
-  console.error('   Available SHIPABLE vars:', Object.keys(process.env).filter(key => key.startsWith('SHIPABLE')));
-  // Don't exit in production, let Railway handle restart
-  if (process.env.NODE_ENV !== 'production') {
+if (!JWT_TOKEN) {
+  console.error('❌ JWT Token is required but not found in environment variables');
+  console.error('   Available environment variable keys:', Object.keys(process.env).filter(key => 
+    key.includes('TOKEN') || key.includes('JWT') || key.includes('SHIPABLE')
+  ));
+  console.error('   Looking for: SHIPABLE_JWT_TOKEN, VITE_SHIPABLE_JWT_TOKEN, or JWT_SECRET');
+
+  // In production, warn but don't exit to allow Railway to handle restart
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('⚠️  Continuing without JWT token - some features may not work');
+  } else {
     process.exit(1);
   }
 }
 
 // Shipable AI configuration
 const SHIPABLE_API_BASE = process.env.SHIPABLE_BASE_URL || 'https://api.shipable.ai/v2';
-const SHIPABLE_JWT_TOKEN = process.env.SHIPABLE_JWT_TOKEN;
+const SHIPABLE_JWT_TOKEN = JWT_TOKEN;
 
 // In-memory session storage (use Redis in production)
 const sessions = new Map();
