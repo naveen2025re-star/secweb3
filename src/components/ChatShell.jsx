@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Zap } from 'lucide-react'
 import Sidebar from './Sidebar'
 import ChatInterface from './ChatInterface'
 import ChatInput from './ChatInput'
@@ -28,6 +29,8 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
   // Credit management
   const [userPlan, setUserPlan] = useState(null)
   const [creditsBalance, setCreditsBalance] = useState(user?.creditsBalance || 0)
+  const [creditsHistory, setCreditsHistory] = useState([])
+  const [showCreditsNotification, setShowCreditsNotification] = useState(false)
 
   // Load user plan and credits
   const loadUserPlan = async () => {
@@ -228,8 +231,27 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
       // Update credits balance if provided
       if (sessionData.creditInfo) {
         const newBalance = sessionData.creditInfo.creditsRemaining;
+        const deducted = sessionData.creditInfo.creditsDeducted;
+        
         setCreditsBalance(newBalance);
-        console.log(`💳 Credits deducted: ${sessionData.creditInfo.creditsDeducted}, Remaining: ${newBalance}`);
+        console.log(`💳 Credits deducted: ${deducted}, Remaining: ${newBalance}`);
+
+        // Add to credits history
+        if (deducted > 0) {
+          const historyEntry = {
+            id: Date.now(),
+            type: 'deduction',
+            amount: deducted,
+            reason: contractCode.trim() ? 'Contract Analysis' : 'AI Chat',
+            timestamp: new Date().toISOString(),
+            remainingBalance: newBalance
+          };
+          setCreditsHistory(prev => [historyEntry, ...prev.slice(0, 9)]); // Keep last 10 entries
+
+          // Show visual notification
+          setShowCreditsNotification(true);
+          setTimeout(() => setShowCreditsNotification(false), 3000);
+        }
 
         // Also update the user plan in parent component if needed
         if (typeof onCreditUpdate === 'function') {
@@ -475,6 +497,21 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
 
   return (
     <div className={`h-screen flex flex-col ${darkMode ? 'dark' : ''}`}>
+      {/* Credits Notification */}
+      {showCreditsNotification && (
+        <div className="fixed top-20 right-4 z-50 animate-in slide-in-from-right duration-300">
+          <div className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg border-l-4 border-blue-300">
+            <div className="flex items-center space-x-2">
+              <Zap className="h-4 w-4" />
+              <span className="text-sm font-medium">Credits Updated</span>
+            </div>
+            <div className="text-xs opacity-90 mt-1">
+              Current balance: {creditsBalance} credits
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <Header
         darkMode={darkMode}
@@ -482,7 +519,8 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
         user={{
           ...user,
           creditsBalance,
-          plan: userPlan
+          plan: userPlan,
+          creditsHistory
         }}
         onShowPlans={onShowPlans}
         onDisconnect={onDisconnect}

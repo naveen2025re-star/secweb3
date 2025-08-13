@@ -1,5 +1,5 @@
 import React from 'react'
-import { Shield, Moon, Sun } from 'lucide-react'
+import { Shield, Moon, Sun, Zap, TrendingUp } from 'lucide-react'
 
 const Header = ({ darkMode, setDarkMode, user, creditsBalance, onShowPlans, onDisconnect }) => {
   return (
@@ -16,15 +16,29 @@ const Header = ({ darkMode, setDarkMode, user, creditsBalance, onShowPlans, onDi
           <div className="flex items-center space-x-4">
             {user && (
               <div className="flex items-center space-x-4">
-                <div className="text-sm text-gray-600 dark:text-gray-300">
-                  <span className="font-medium">{creditsBalance || 0}</span> credits
+                {/* Enhanced Credits Display */}
+                <div className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                  <Zap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <div className="flex flex-col">
+                    <div className="flex items-center space-x-1">
+                      <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                        {creditsBalance || 0}
+                      </span>
+                      <span className="text-xs text-blue-600 dark:text-blue-400">credits</span>
+                    </div>
+                    <div className="text-xs text-blue-500 dark:text-blue-300">
+                      {user.plan?.name || 'Free'} Plan
+                    </div>
+                  </div>
                 </div>
+
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={onShowPlans}
-                    className="text-sm px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                    className="flex items-center space-x-1 text-sm px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all duration-200 font-medium shadow-sm hover:shadow-md"
                   >
-                    Upgrade
+                    <TrendingUp className="h-4 w-4" />
+                    <span>Upgrade</span>
                   </button>
                   <button
                     onClick={onDisconnect}

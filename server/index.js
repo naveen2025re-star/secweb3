@@ -1104,7 +1104,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     });
 
     // Send immediate acknowledgment to prevent 502 timeout
-    res.write(`data: ${JSON.stringify({ body: '🚀 **Starting Analysis**\n\nConnecting to AI service...' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ body: '🚀 **Starting Analysis**\n\nInitializing...' })}\n\n`);
 
     // Add keep-alive mechanism
     const keepAlive = setInterval(() => {
