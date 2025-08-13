@@ -8,7 +8,6 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { pool } from './database.js';
 import createTables from './migrations/001_create_tables.js';
 
 console.log('🔍 Checking dependencies...');
