@@ -1147,16 +1147,17 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('   Stream enabled:', payload.stream);
     console.log('   Using JWT token:', SHIPABLE_JWT_TOKEN ? `${SHIPABLE_JWT_TOKEN.substring(0, 20)}...` : 'MISSING');
 
-    // Create FormData with boundary for multipart/form-data
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    // Create FormData with boundary for multipart/form-data (exact format as specified)
+    const boundary = 'WebKitFormBoundary3GaZIV8DKwSCS197';
     const formDataBody = 
       `------${boundary}\r\n` +
       `Content-Disposition: form-data; name="request"\r\n\r\n` +
       `${JSON.stringify(payload)}\r\n` +
-      `------${boundary}--`;
+      `------${boundary}--\r\n`;
 
     console.log('🔄 Calling Shipable API:', `${SHIPABLE_API_BASE}/chat/open-playground`);
     console.log('📦 Using multipart/form-data with boundary:', boundary);
+    console.log('📦 Form data body preview:', formDataBody.substring(0, 200) + '...');
 
     // Create AbortController for timeout handling
     const controller = new AbortController();
@@ -1170,7 +1171,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
         method: 'POST',
         headers: {
-          'Content-Type': `multipart/form-data; boundary=----${boundary}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive'
