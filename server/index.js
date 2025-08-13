@@ -1147,8 +1147,17 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('   Stream enabled:', payload.stream);
     console.log('   Using JWT token:', SHIPABLE_JWT_TOKEN ? `${SHIPABLE_JWT_TOKEN.substring(0, 20)}...` : 'MISSING');
 
-    // Create FormData with boundary for multipart/form-data (exact format as specified)
-    const boundary = 'WebKitFormBoundary3GaZIV8DKwSCS197';
+    // Generate dynamic boundary like modern applications
+    const generateBoundary = () => {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let boundary = 'WebKitFormBoundary';
+      for (let i = 0; i < 16; i++) {
+        boundary += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return boundary;
+    };
+    
+    const boundary = generateBoundary();
     const formDataBody = 
       `------${boundary}\r\n` +
       `Content-Disposition: form-data; name="request"\r\n\r\n` +
