@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useWeb3Auth } from './hooks/useWeb3Auth';
 import Web3Auth from './components/Web3Auth';
 import ChatShell from './components/ChatShell';
-import PlansModal from './components/PlansModal';
+import PricingModal from './components/PricingModal';
 
 function App() {
   const [showPlansModal, setShowPlansModal] = useState(false);
@@ -54,11 +54,10 @@ function App() {
         />
       )}
 
-      <PlansModal
+      <PricingModal
         isOpen={showPlansModal}
         onClose={handleClosePlans}
-        currentUser={user}
-        onUpgradeRequest={handleUpgradeRequest}
+        currentPlan={user?.plan?.id || 'starter'}
       />
     </>
   );

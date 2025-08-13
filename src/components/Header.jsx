@@ -1,7 +1,9 @@
 import React from 'react'
 import { Shield, Moon, Sun, Zap, TrendingUp } from 'lucide-react'
 
-const Header = ({ darkMode, setDarkMode, user, creditsBalance, onShowPlans, onDisconnect }) => {
+const Header = ({ darkMode, setDarkMode, user, onShowPlans, onDisconnect }) => {
+  // Use the credits balance from user object (which gets updated in real-time)
+  const creditsBalance = user?.creditsBalance || 0;
   return (
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 py-4 max-w-6xl">
