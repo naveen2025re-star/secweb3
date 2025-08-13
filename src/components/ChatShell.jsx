@@ -189,7 +189,9 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
 
     try {
       // Step 1: Create session (with credit deduction)
-      const sessionData = await analyzeContract(contractCode, contractCode ? 'contract.sol' : undefined)
+      // For chat messages, send the message content; for contracts, send the contract code
+      const contentToAnalyze = contractCode.trim() ? contractCode : message
+      const sessionData = await analyzeContract(contentToAnalyze, contractCode ? 'contract.sol' : undefined)
 
       if (!sessionData.success) {
         // Remove loading message first
