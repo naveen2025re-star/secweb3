@@ -1,14 +1,16 @@
 import dotenv from 'dotenv';
 import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import multer from 'multer';
-import path from 'path';
+import FormData from 'form-data';
+import fetch from 'node-fetch';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import path from 'path';
 import { fileURLToPath } from 'url';
+import { pool } from './database.js';
+import createTables from './migrations/001_create_tables.js';
 
-// Check if critical dependencies are available
 console.log('🔍 Checking dependencies...');
 try {
   await import('pg');
@@ -1433,6 +1435,202 @@ app.get('/api/sessions/:sessionKey', async (req, res) => {
   }
 });
 
+// Main analyze endpoint supporting both direct code and file selection
+app.post('/api/analyze', async (req, res) => {
+  try {
+    const { message, code, selectedFileIds } = req.body;
+    
+    // Authenticate user
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, error: 'Access token required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decodedUser = jwt.verify(token, JWT_TOKEN);
+    
+    let analysisCode = code;
+    let combinedFilename = 'contract.sol';
+    
+    // If file selection mode, retrieve and combine file contents
+    if (selectedFileIds && selectedFileIds.length > 0) {
+      const fileContents = [];
+      const filenames = [];
+      
+      for (const fileId of selectedFileIds) {
+        const fileResult = await pool.query(`
+          SELECT file_content, filename, original_name, language
+          FROM contract_files 
+          WHERE id = $1 AND user_id = $2 AND is_active = true
+        `, [fileId, decodedUser.userId]);
+        
+        if (fileResult.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: `File not found: ${fileId}`
+          });
+        }
+        
+        const file = fileResult.rows[0];
+        fileContents.push(`// === ${file.original_name} ===\n${file.file_content}\n`);
+        filenames.push(file.original_name);
+        
+        // Update scan count
+        await pool.query(`
+          UPDATE contract_files 
+          SET scan_count = scan_count + 1, last_scanned = CURRENT_TIMESTAMP 
+          WHERE id = $1
+        `, [fileId]);
+      }
+      
+      analysisCode = fileContents.join('\n');
+      combinedFilename = filenames.length > 1 
+        ? `${filenames.length}_contracts_combined` 
+        : filenames[0];
+    }
+    
+    if (!analysisCode && !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'No code or file content provided for analysis'
+      });
+    }
+
+    // Validate the contract code if provided
+    if (analysisCode) {
+      try {
+        validateContractCode(analysisCode);
+      } catch (validationError) {
+        return res.status(400).json({
+          success: false,
+          error: validationError.message
+        });
+      }
+    }
+
+    // Detect language from combined code
+    const language = analysisCode ? detectContractLanguage(analysisCode, combinedFilename) : 'unknown';
+    const lineCount = analysisCode ? analysisCode.split('\n').length : 0;
+
+    // Generate session key
+    const sessionKey = crypto.randomBytes(16).toString('hex');
+    
+    // Check user credits and tier
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [decodedUser.userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const tier = user.subscription_tier || 'free';
+    
+    // Calculate scan cost
+    const scanCost = calculateScanCost(lineCount, tier);
+    
+    // Check credits
+    const currentBalance = user.credits_balance || 0;
+    if (currentBalance < scanCost) {
+      return res.json({
+        success: false,
+        creditError: true,
+        error: `Insufficient credits. Need ${scanCost} credits, but you have ${currentBalance} credits.`,
+        scanCost,
+        availableCredits: currentBalance,
+        requiresUpgrade: true
+      });
+    }
+
+    // Deduct credits
+    try {
+      const tableCheck = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'credits_updated_at'
+      `);
+      
+      const hasUpdatedAtColumn = tableCheck.rows.length > 0;
+      
+      let updateResult;
+      if (hasUpdatedAtColumn) {
+        updateResult = await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance - $1,
+              api_calls_count = api_calls_count + 1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2 AND credits_balance >= $1
+          RETURNING credits_balance
+        `, [scanCost, decodedUser.userId]);
+      } else {
+        updateResult = await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance - $1,
+              api_calls_count = api_calls_count + 1
+          WHERE id = $2 AND credits_balance >= $1
+          RETURNING credits_balance
+        `, [scanCost, decodedUser.userId]);
+      }
+      
+      if (updateResult.rows.length === 0) {
+        return res.json({
+          success: false,
+          creditError: true,
+          error: 'Insufficient credits for this analysis',
+          scanCost,
+          availableCredits: currentBalance
+        });
+      }
+    } catch (creditError) {
+      console.error('Credit deduction error:', creditError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to process payment'
+      });
+    }
+
+    // Store session for streaming
+    sessions.set(sessionKey, {
+      userId: decodedUser.userId,
+      code: analysisCode,
+      filename: combinedFilename,
+      language,
+      lineCount,
+      scanCost,
+      creditsDeducted: scanCost,
+      selectedFileIds: selectedFileIds || [],
+      createdAt: new Date().toISOString()
+    });
+
+    console.log('✅ Analysis session created:', {
+      sessionKey,
+      userId: decodedUser.userId,
+      language,
+      lineCount,
+      scanCost,
+      filesSelected: selectedFileIds?.length || 0
+    });
+
+    res.json({
+      success: true,
+      sessionKey,
+      language,
+      lineCount,
+      scanCost,
+      creditInfo: {
+        creditsDeducted: scanCost,
+        creditsRemaining: updateResult.rows[0].credits_balance
+      },
+      filesAnalyzed: selectedFileIds?.length || 0
+    });
+
+  } catch (error) {
+    console.error('Analyze endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Analysis failed'
+    });
+  }
+});
+
 // File upload endpoint
 app.post('/api/upload', upload.single('contract'), async (req, res) => {
   try {
@@ -1495,6 +1693,241 @@ app.get('/api/languages', (req, res) => {
   });
 });
 
+// Multi-file upload endpoint
+app.post('/api/files/upload', upload.array('contracts', 10), async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, error: 'Access token required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decodedUser = jwt.verify(token, JWT_TOKEN);
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No files uploaded'
+      });
+    }
+
+    const uploadedFiles = [];
+    const errors = [];
+
+    for (const file of req.files) {
+      try {
+        const code = file.buffer.toString('utf8');
+        const filename = file.originalname;
+        const language = detectContractLanguage(code, filename);
+        const checksum = crypto.createHash('sha256').update(code).digest('hex');
+        
+        // Check for duplicates
+        const existingFile = await pool.query(
+          'SELECT id FROM contract_files WHERE user_id = $1 AND checksum = $2 AND is_active = true',
+          [decodedUser.userId, checksum]
+        );
+
+        if (existingFile.rows.length > 0) {
+          errors.push(`File ${filename} already exists`);
+          continue;
+        }
+
+        // Validate the contract code
+        validateContractCode(code);
+
+        // Insert file into database
+        const result = await pool.query(`
+          INSERT INTO contract_files (
+            user_id, filename, original_name, file_content, file_size, 
+            language, file_type, checksum
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id, filename, original_name, file_size, language, upload_date
+        `, [
+          decodedUser.userId,
+          filename,
+          filename,
+          code,
+          file.size,
+          language,
+          path.extname(filename).toLowerCase().slice(1),
+          checksum
+        ]);
+
+        uploadedFiles.push(result.rows[0]);
+      } catch (fileError) {
+        errors.push(`${file.originalname}: ${fileError.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      uploadedFiles,
+      errors,
+      message: `${uploadedFiles.length} files uploaded successfully`
+    });
+
+  } catch (error) {
+    console.error('Multi-file upload error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'File upload failed'
+    });
+  }
+});
+
+// Get user's contract files
+app.get('/api/files', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, error: 'Access token required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decodedUser = jwt.verify(token, JWT_TOKEN);
+
+    const files = await pool.query(`
+      SELECT 
+        id, filename, original_name, file_size, language, 
+        upload_date, last_scanned, scan_count, tags, description
+      FROM contract_files 
+      WHERE user_id = $1 AND is_active = true 
+      ORDER BY upload_date DESC
+    `, [decodedUser.userId]);
+
+    res.json({
+      success: true,
+      files: files.rows
+    });
+
+  } catch (error) {
+    console.error('Get files error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve files'
+    });
+  }
+});
+
+// Get specific file content for scanning
+app.get('/api/files/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, error: 'Access token required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decodedUser = jwt.verify(token, JWT_TOKEN);
+    const fileId = req.params.id;
+
+    const file = await pool.query(`
+      SELECT file_content, filename, language, original_name
+      FROM contract_files 
+      WHERE id = $1 AND user_id = $2 AND is_active = true
+    `, [fileId, decodedUser.userId]);
+
+    if (file.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      file: file.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Get file content error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve file content'
+    });
+  }
+});
+
+// Delete contract file
+app.delete('/api/files/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, error: 'Access token required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decodedUser = jwt.verify(token, JWT_TOKEN);
+    const fileId = req.params.id;
+
+    const result = await pool.query(`
+      UPDATE contract_files 
+      SET is_active = false 
+      WHERE id = $1 AND user_id = $2
+    `, [fileId, decodedUser.userId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'File deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete file error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete file'
+    });
+  }
+});
+
+// Update file metadata
+app.patch('/api/files/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ success: false, error: 'Access token required' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decodedUser = jwt.verify(token, JWT_TOKEN);
+    const fileId = req.params.id;
+    const { tags, description } = req.body;
+
+    const result = await pool.query(`
+      UPDATE contract_files 
+      SET tags = $1, description = $2
+      WHERE id = $3 AND user_id = $4 AND is_active = true
+      RETURNING id, filename, tags, description
+    `, [tags || [], description || '', fileId, decodedUser.userId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      file: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Update file metadata error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update file metadata'
+    });
+  }
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Unhandled error:', error);
@@ -1531,7 +1964,12 @@ app.get('*', (req, res) => {
         'GET /api/health',
         'POST /api/analyze',
         'POST /api/upload',
-        'GET /api/languages'
+        'GET /api/languages',
+        'POST /api/files/upload',
+        'GET /api/files',
+        'GET /api/files/:id',
+        'DELETE /api/files/:id',
+        'PATCH /api/files/:id'
       ]
     });
   }

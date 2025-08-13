@@ -1,0 +1,333 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Files, Code, ChevronDown, ChevronRight, CheckSquare, Square, 
+  FileText, Calendar, BarChart3, Zap, AlertCircle, Loader 
+} from 'lucide-react';
+
+const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, className = '' }) => {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [expandedCategories, setExpandedCategories] = useState({
+    recent: true,
+    byLanguage: false
+  });
+
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+
+  const fetchFiles = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/files', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch files');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setFiles(result.files);
+      } else {
+        setError(result.error);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileToggle = (fileId) => {
+    const isSelected = selectedFileIds.includes(fileId);
+    let newSelection;
+    
+    if (isSelected) {
+      newSelection = selectedFileIds.filter(id => id !== fileId);
+    } else {
+      newSelection = [...selectedFileIds, fileId];
+    }
+    
+    onFilesSelected(newSelection);
+  };
+
+  const handleSelectAll = (filesToSelect) => {
+    const allSelected = filesToSelect.every(file => selectedFileIds.includes(file.id));
+    
+    if (allSelected) {
+      const newSelection = selectedFileIds.filter(id => 
+        !filesToSelect.some(file => file.id === id)
+      );
+      onFilesSelected(newSelection);
+    } else {
+      const newSelection = [...new Set([
+        ...selectedFileIds, 
+        ...filesToSelect.map(file => file.id)
+      ])];
+      onFilesSelected(newSelection);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getLanguageColor = (language) => {
+    const colors = {
+      solidity: 'bg-purple-100 text-purple-800 border-purple-200',
+      vyper: 'bg-green-100 text-green-800 border-green-200',
+      move: 'bg-blue-100 text-blue-800 border-blue-200',
+      cairo: 'bg-orange-100 text-orange-800 border-orange-200'
+    };
+    return colors[language?.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
+
+  const toggleCategory = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
+  if (loading) {
+    return (
+      <div className={`p-6 ${className}`}>
+        <div className="flex items-center justify-center py-8">
+          <div className="flex items-center space-x-3">
+            <Loader className="w-5 h-5 animate-spin text-blue-600" />
+            <span className="text-gray-600">Loading your contract files...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={`p-6 ${className}`}>
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
+            <p className="text-red-600 text-sm mb-3">{error}</p>
+            <button
+              onClick={fetchFiles}
+              className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (files.length === 0) {
+    return (
+      <div className={`p-6 ${className}`}>
+        <div className="text-center py-8">
+          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-sm font-medium text-gray-900 mb-2">
+            No contract files uploaded yet
+          </h3>
+          <p className="text-xs text-gray-600 mb-4">
+            Upload some contract files first to select them for scanning
+          </p>
+          <button
+            onClick={onClose}
+            className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Upload Files
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Group files by language
+  const filesByLanguage = files.reduce((acc, file) => {
+    const lang = file.language || 'unknown';
+    if (!acc[lang]) acc[lang] = [];
+    acc[lang].push(file);
+    return acc;
+  }, {});
+
+  // Get recent files (last 5)
+  const recentFiles = files.slice(0, 5);
+
+  const FileItem = ({ file, compact = false }) => (
+    <div
+      key={file.id}
+      className={`
+        flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all duration-150
+        ${selectedFileIds.includes(file.id)
+          ? 'border-blue-500 bg-blue-50'
+          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+        }
+      `}
+      onClick={() => handleFileToggle(file.id)}
+    >
+      <div className="flex items-center space-x-3 min-w-0 flex-1">
+        <div className="flex-shrink-0">
+          {selectedFileIds.includes(file.id) ? (
+            <CheckSquare className="w-4 h-4 text-blue-600" />
+          ) : (
+            <Square className="w-4 h-4 text-gray-400" />
+          )}
+        </div>
+        
+        <div className="flex items-center space-x-2 min-w-0 flex-1">
+          <div className="p-1.5 bg-gray-100 rounded">
+            <FileText className="w-3 h-3 text-blue-600" />
+          </div>
+          
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {file.original_name}
+            </p>
+            
+            {!compact && (
+              <div className="flex items-center space-x-2 mt-1">
+                <span className={`
+                  px-1.5 py-0.5 text-xs rounded border
+                  ${getLanguageColor(file.language)}
+                `}>
+                  {file.language?.toUpperCase() || 'UNKNOWN'}
+                </span>
+                <span className="text-xs text-gray-500 flex items-center">
+                  <BarChart3 className="w-3 h-3 mr-1" />
+                  {formatFileSize(file.file_size)}
+                </span>
+                <span className="text-xs text-gray-500 flex items-center">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  {formatDate(file.upload_date)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={`max-h-96 overflow-y-auto ${className}`}>
+      <div className="space-y-4">
+        {/* Selection Summary */}
+        {selectedFileIds.length > 0 && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-blue-800 font-medium">
+                {selectedFileIds.length} file{selectedFileIds.length !== 1 ? 's' : ''} selected for scanning
+              </span>
+              <div className="flex items-center space-x-2">
+                <Zap className="w-4 h-4 text-blue-600" />
+                <span className="text-xs text-blue-600">Ready to analyze</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recent Files */}
+        <div>
+          <button
+            onClick={() => toggleCategory('recent')}
+            className="flex items-center space-x-2 w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors"
+          >
+            {expandedCategories.recent ? (
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-gray-500" />
+            )}
+            <span className="text-sm font-medium text-gray-900">
+              Recent Files ({recentFiles.length})
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelectAll(recentFiles);
+              }}
+              className="ml-auto text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50"
+            >
+              {recentFiles.every(file => selectedFileIds.includes(file.id)) ? 'Deselect All' : 'Select All'}
+            </button>
+          </button>
+          
+          {expandedCategories.recent && (
+            <div className="space-y-2 ml-6 mt-2">
+              {recentFiles.map(file => (
+                <FileItem key={file.id} file={file} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Files by Language */}
+        <div>
+          <button
+            onClick={() => toggleCategory('byLanguage')}
+            className="flex items-center space-x-2 w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors"
+          >
+            {expandedCategories.byLanguage ? (
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-gray-500" />
+            )}
+            <span className="text-sm font-medium text-gray-900">
+              By Language ({Object.keys(filesByLanguage).length} languages)
+            </span>
+          </button>
+          
+          {expandedCategories.byLanguage && (
+            <div className="space-y-3 ml-6 mt-2">
+              {Object.entries(filesByLanguage).map(([language, languageFiles]) => (
+                <div key={language}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`
+                      px-2 py-1 text-xs rounded border font-medium
+                      ${getLanguageColor(language)}
+                    `}>
+                      {language.toUpperCase()} ({languageFiles.length})
+                    </span>
+                    
+                    <button
+                      onClick={() => handleSelectAll(languageFiles)}
+                      className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50"
+                    >
+                      {languageFiles.every(file => selectedFileIds.includes(file.id)) ? 'Deselect' : 'Select All'}
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    {languageFiles.map(file => (
+                      <FileItem key={file.id} file={file} compact={true} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default FileSelector;

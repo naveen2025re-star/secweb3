@@ -83,11 +83,34 @@ const createTables = async () => {
       )
     `);
 
+    // Contract files table for multi-file upload and management
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS contract_files (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        filename VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        file_content TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        language VARCHAR(50),
+        file_type VARCHAR(10) NOT NULL,
+        checksum VARCHAR(64) NOT NULL,
+        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_scanned TIMESTAMP,
+        scan_count INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        tags TEXT[],
+        description TEXT
+      )
+    `);
+
     // Create indexes
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_wallet_address ON users(wallet_address)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_web3_sessions_wallet_address ON web3_sessions(wallet_address)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_contract_files_user_id ON contract_files(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_contract_files_checksum ON contract_files(checksum)');
 
     await client.query('COMMIT');
     console.log('✅ Database tables created successfully');
