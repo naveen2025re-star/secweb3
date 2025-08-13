@@ -15,50 +15,64 @@ const getAuthHeaders = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {}
 }
 
-// Main contract analysis function - directly calls Shipable API
+// Main contract analysis function - calls backend with credit deduction
 export const analyzeContract = async (code, filename = null) => {
   try {
-    // Step 1: Create session with Shipable API
-    console.log('🔄 Creating Shipable session...')
+    console.log('🔄 Starting contract analysis with credit deduction...')
 
-    const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
+    const response = await fetch(`${API_BASE_URL}/api/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
-        'Accept': 'application/json'
+        ...getAuthHeaders()
       },
       body: JSON.stringify({
-        source: "website"
+        code,
+        filename
       })
     })
 
-    if (!sessionResponse.ok) {
-      const errorText = await sessionResponse.text()
-      console.error('❌ Shipable session creation failed:', errorText)
-      throw new Error(`Failed to create Shipable session: ${sessionResponse.status} - ${errorText}`)
+    const data = await response.json()
+
+    if (!response.ok) {
+      // Handle specific error cases
+      if (response.status === 401) {
+        throw new Error('Authentication required. Please sign in again.')
+      }
+
+      if (response.status === 402 || response.status === 403) {
+        // Credit-related errors - return detailed info for UI
+        return {
+          success: false,
+          error: data.error,
+          scanCost: data.scanCost,
+          availableCredits: data.availableCredits,
+          planName: data.planName,
+          creditError: true
+        }
+      }
+
+      if (response.status === 503) {
+        throw new Error(data.error || 'Analysis service temporarily unavailable')
+      }
+
+      throw new Error(data.error || `Analysis failed: ${response.status}`)
     }
 
-    const sessionData = await sessionResponse.json()
-    console.log('✅ Shipable session created:', sessionData)
-
-    if (!sessionData || sessionData.statusCode !== 201 || !sessionData.data?.key) {
-      throw new Error(`Invalid session response from Shipable API: ${JSON.stringify(sessionData)}`)
+    if (!data.success) {
+      throw new Error(data.error || 'Analysis session creation failed')
     }
+
+    console.log('✅ Analysis session created with credit deduction:', data.creditInfo)
 
     return {
       success: true,
-      sessionKey: sessionData.data.key,
-      metadata: {
-        language: detectContractLanguage(code, filename),
-        filename: filename || null,
-        lineCount: code ? code.split('\n').length : 0,
-        timestamp: new Date().toISOString(),
-        shipableSessionId: sessionData.data.id
-      }
+      sessionKey: data.sessionKey,
+      creditInfo: data.creditInfo,
+      metadata: data.metadata
     }
   } catch (error) {
-    console.error('API call failed:', error)
+    console.error('Analysis failed:', error)
     throw error
   }
 }

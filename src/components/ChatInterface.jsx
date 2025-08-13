@@ -6,7 +6,7 @@ import rehypeHighlight from 'rehype-highlight'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
-const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
+const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans }) => {
   const messagesEndRef = useRef(null)
   const [copiedMessageId, setCopiedMessageId] = useState(null)
 
@@ -247,6 +247,17 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage }) => {
                             content={message.content} 
                             streaming={message.streaming} 
                           />
+                          {/* Upgrade button for credit errors */}
+                          {message.showUpgradeButton && onShowPlans && (
+                            <div className="mt-4 pt-3 border-t border-gray-600">
+                              <button
+                                onClick={onShowPlans}
+                                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                              >
+                                ⚡ Upgrade Plan
+                              </button>
+                            </div>
+                          )}
                           {/* Copy button */}
                           <button
                             className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"

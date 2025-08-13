@@ -143,6 +143,16 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
     setAnalyzing(true)
     setStreamingMessage('')
 
+    // Show immediate feedback
+    const loadingMessage = {
+      id: Date.now() + 1000,
+      type: 'ai',
+      content: '🔍 **Initializing scan and deducting credits...**\n\nPlease wait while we prepare your analysis.',
+      timestamp: new Date().toLocaleTimeString(),
+      streaming: true
+    }
+    setMessages(prev => [...prev, loadingMessage])
+
     // Create conversation if none exists
     let conversationId = activeConversation
     if (!conversationId) {
@@ -179,18 +189,26 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
       const sessionData = await analyzeContract(contractCode, contractCode ? 'contract.sol' : undefined)
 
       if (!sessionData.success) {
-        // Check for credit-related errors
-        if (sessionData.error && sessionData.scanCost) {
-          const errorMsg = sessionData.error.includes('credits') 
-            ? `❌ **Insufficient Credits**\n\nThis scan requires ${sessionData.scanCost} credits but you only have ${sessionData.availableCredits || sessionData.userCredits || 0}.\n\n[Upgrade your plan](javascript:void(0)) to continue.`
-            : `❌ **Scan Blocked**\n\n${sessionData.error}\n\nPlan: ${sessionData.planName || 'Unknown'}`;
+        // Remove loading message first
+        setMessages(prev => prev.filter(msg => msg.id !== Date.now() + 1000))
+
+        // Handle credit-related errors with upgrade button
+        if (sessionData.creditError) {
+          let errorMsg = `❌ **${sessionData.error.includes('Insufficient') ? 'Insufficient Credits' : 'Scan Limit Exceeded'}**\n\n${sessionData.error}`;
+
+          if (sessionData.scanCost && sessionData.availableCredits !== undefined) {
+            errorMsg += `\n\n**💳 Scan Cost:** ${sessionData.scanCost} credits\n**💰 Available:** ${sessionData.availableCredits} credits`;
+          }
+
+          errorMsg += `\n\n*Upgrade your plan to get more credits and higher scan limits.*`;
 
           const errorMessage = {
             id: Date.now() + 2,
             type: 'ai',
             content: errorMsg,
             timestamp: new Date().toLocaleTimeString(),
-            error: true
+            error: true,
+            showUpgradeButton: true
           };
           setMessages(prev => [...prev, errorMessage]);
           return;
@@ -199,10 +217,13 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
         throw new Error(sessionData.error || 'Failed to create analysis session');
       }
 
+      // Remove loading message
+      setMessages(prev => prev.filter(msg => msg.id !== Date.now() + 1000))
+
       // Update credits balance if provided
       if (sessionData.creditInfo) {
         setCreditsBalance(sessionData.creditInfo.creditsRemaining);
-        console.log(`💳 Credits updated: ${sessionData.creditInfo.creditsRemaining} remaining`);
+        console.log(`💳 Credits deducted: ${sessionData.creditInfo.creditsDeducted}, Remaining: ${sessionData.creditInfo.creditsRemaining}`);
       }
 
       // Step 2: Start streaming
@@ -301,6 +322,9 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
     } catch (error) {
       setAnalyzing(false)
       setStreamingMessage('')
+
+      // Remove loading message
+      setMessages(prev => prev.filter(msg => msg.id !== Date.now() + 1000))
 
       const errorMessage = {
         id: Date.now() + 2,
@@ -469,6 +493,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
             messages={messages}
             isAnalyzing={analyzing}
             streamingMessage={streamingMessage}
+            onShowPlans={onShowPlans}
           />
 
           {/* Chat Input */}

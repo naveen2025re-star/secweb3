@@ -172,6 +172,26 @@ const detectContractLanguage = (code, filename = '') => {
   return 'Unknown';
 };
 
+const detectContractLanguage = (code, filename = '') => {
+  const lowerCode = code ? code.toLowerCase() : '';
+  const lowerFilename = filename ? filename.toLowerCase() : '';
+
+  if (lowerFilename.endsWith('.sol') || lowerCode.includes('pragma solidity') || lowerCode.includes('contract ')) {
+    return 'Solidity';
+  }
+  if (lowerFilename.endsWith('.vy') || lowerCode.includes('# @version') || lowerCode.includes('@external')) {
+    return 'Vyper';
+  }
+  if (lowerFilename.endsWith('.move') || lowerCode.includes('module ') || lowerCode.includes('public fun ')) {
+    return 'Move';
+  }
+  if (lowerFilename.endsWith('.cairo') || lowerCode.includes('#[contract]') || lowerCode.includes('func ')) {
+    return 'Cairo';
+  }
+
+  return 'Unknown';
+};
+
 const validateContractCode = (code) => {
   if (!code || typeof code !== 'string') {
     throw new Error('Contract code is required and must be a string');
@@ -299,6 +319,199 @@ app.post('/api/plans/estimate-cost', async (req, res) => {
 });
 
 console.log('✅ Basic plan routes enabled directly');
+
+// Contract analysis endpoint with credit deduction
+app.post('/api/analyze', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Authentication required' 
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+
+    // Get user and plan info with error handling
+    let userResult;
+    try {
+      userResult = await pool.query(`
+        SELECT u.*, 
+               COALESCE(p.credits_per_month, 100) as credits_per_month,
+               COALESCE(p.credits_per_scan_limit, 50) as credits_per_scan_limit,
+               COALESCE(p.files_per_scan_limit, 5) as files_per_scan_limit,
+               COALESCE(p.name, 'Free') as plan_name
+        FROM users u
+        LEFT JOIN plans p ON u.plan_id = p.id
+        WHERE u.id = $1
+      `, [decoded.userId]);
+    } catch (dbError) {
+      console.error('❌ Database error in analyze:', dbError);
+      return res.status(503).json({
+        success: false,
+        error: 'Database temporarily unavailable. Please try again.'
+      });
+    }
+
+    if (!userResult.rows.length) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'User not found. Please sign in again.' 
+      });
+    }
+
+    const user = userResult.rows[0];
+    const { code, filename } = req.body;
+
+    // Validate contract code
+    if (!code || typeof code !== 'string' || code.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid contract code provided'
+      });
+    }
+
+    // Calculate scan cost (simplified: 1 credit per KB + base cost of 5)
+    const codeSizeKB = Math.ceil(code.length / 1024);
+    const scanCost = Math.max(5, codeSizeKB + 5);
+
+    // Check plan limits
+    if (scanCost > user.credits_per_scan_limit) {
+      return res.status(403).json({
+        success: false,
+        error: `This scan requires ${scanCost} credits but your ${user.plan_name} plan allows maximum ${user.credits_per_scan_limit} credits per scan`,
+        scanCost,
+        availableCredits: user.credits_balance,
+        planName: user.plan_name
+      });
+    }
+
+    if (user.credits_balance < scanCost) {
+      return res.status(402).json({
+        success: false,
+        error: `Insufficient credits. You need ${scanCost} credits but only have ${user.credits_balance}`,
+        scanCost,
+        availableCredits: user.credits_balance,
+        planName: user.plan_name
+      });
+    }
+
+    // Deduct credits BEFORE calling Shipable API
+    const deductResult = await pool.query(`
+      UPDATE users 
+      SET credits_balance = credits_balance - $1,
+          credits_updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND credits_balance >= $1
+      RETURNING credits_balance
+    `, [scanCost, decoded.userId]);
+
+    if (!deductResult.rows.length) {
+      return res.status(402).json({
+        success: false,
+        error: `Credit deduction failed. Please refresh and try again`,
+        scanCost,
+        availableCredits: user.credits_balance
+      });
+    }
+
+    const newBalance = deductResult.rows[0].credits_balance;
+
+    // Now call Shipable API to create session
+    try {
+      const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          source: "website"
+        })
+      });
+
+      if (!sessionResponse.ok) {
+        // Refund credits on API failure
+        await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance + $1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `, [scanCost, decoded.userId]);
+
+        const errorText = await sessionResponse.text();
+        console.error('❌ Shipable session creation failed:', errorText);
+
+        return res.status(503).json({
+          success: false,
+          error: 'Analysis service temporarily unavailable. Credits have been refunded.',
+          refunded: true
+        });
+      }
+
+      const sessionData = await sessionResponse.json();
+
+      if (!sessionData || sessionData.statusCode !== 201 || !sessionData.data?.key) {
+        // Refund credits on invalid response
+        await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance + $1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `, [scanCost, decoded.userId]);
+
+        return res.status(503).json({
+          success: false,
+          error: 'Invalid response from analysis service. Credits have been refunded.',
+          refunded: true
+        });
+      }
+
+      // Success - return session key and updated credit info
+      return res.json({
+        success: true,
+        sessionKey: sessionData.data.key,
+        creditInfo: {
+          creditsDeducted: scanCost,
+          creditsRemaining: newBalance
+        },
+        metadata: {
+          language: detectContractLanguage(code, filename),
+          filename: filename || null,
+          scanCost,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+    } catch (apiError) {
+      // Refund credits on API error
+      await pool.query(`
+        UPDATE users 
+        SET credits_balance = credits_balance + $1,
+            credits_updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [scanCost, decoded.userId]);
+
+      console.error('❌ Shipable API error:', apiError);
+
+      return res.status(503).json({
+        success: false,
+        error: 'Analysis service error. Credits have been refunded.',
+        refunded: true
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Analyze endpoint error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
