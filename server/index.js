@@ -1156,13 +1156,6 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('📦 Using FormData API for multipart/form-data');
     console.log('📦 Complete payload object:', JSON.stringify(payload, null, 2));
 
-    // Create AbortController for timeout handling
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.warn('⏰ Shipable API call timed out, aborting...');
-      controller.abort();
-    }, 25000); // 25 second timeout (less than Railway's 30s limit)
-
     let response;
     try {
       response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
@@ -1173,18 +1166,9 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive'
         },
-        body: formData,
-        signal: controller.signal
+        body: formData
       });
-
-      clearTimeout(timeoutId);
     } catch (fetchError) {
-      clearTimeout(timeoutId);
-
-      if (fetchError.name === 'AbortError') {
-        console.error('❌ Shipable API call timed out');
-        throw new Error('Analysis service timed out. Please try again with a shorter contract.');
-      }
 
       console.error('❌ Shipable API fetch error:', fetchError);
       throw new Error(`Failed to connect to analysis service: ${fetchError.message}`);
@@ -1227,23 +1211,10 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     let totalBytes = 0;
 
     try {
-      // Set a timeout for the entire streaming process
-      const streamTimeout = setTimeout(() => {
-        console.warn('⏰ Streaming timeout reached');
-        if (!res.destroyed) {
-          res.write(`data: ${JSON.stringify({ 
-            body: '\n\n⏰ **Analysis Timeout**\n\nThe analysis is taking longer than expected. The results may be incomplete.'
-          })}\n\n`);
-          res.write('data: [DONE]\n\n');
-          cleanup();
-        }
-      }, 20000); // 20 second streaming timeout
-
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          clearTimeout(streamTimeout);
           const streamDuration = Date.now() - streamStartTime;
           console.log('✅ Streaming completed:', {
             duration: `${streamDuration}ms`,
