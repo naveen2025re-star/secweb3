@@ -460,19 +460,19 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    // Validate contract code
-    if (!code || typeof code !== 'string' || code.trim().length < 10) {
-      console.warn('❌ Invalid contract code:', { 
+    // Validate input (allow any message, not just contract code)
+    if (!code || typeof code !== 'string' || code.trim().length === 0) {
+      console.warn('❌ Invalid message:', { 
         codeLength: code?.length, 
         codeType: typeof code 
       });
       return res.status(400).json({
         success: false,
-        error: 'Invalid contract code provided. Code must be at least 10 characters.'
+        error: 'Message is required and cannot be empty.'
       });
     }
 
-    console.log('✅ Contract code validated, length:', code.length);
+    console.log('✅ Message validated, length:', code.length);
 
     // Calculate scan cost (simplified: 1 credit per KB + base cost of 5)
     const codeSizeKB = Math.ceil(code.length / 1024);
@@ -1147,29 +1147,14 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('   Stream enabled:', payload.stream);
     console.log('   Using JWT token:', SHIPABLE_JWT_TOKEN ? `${SHIPABLE_JWT_TOKEN.substring(0, 20)}...` : 'MISSING');
 
-    // Generate dynamic boundary like modern applications
-    const generateBoundary = () => {
-      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let boundary = 'WebKitFormBoundary';
-      for (let i = 0; i < 16; i++) {
-        boundary += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return boundary;
-    };
-    
-    const boundary = generateBoundary();
-    const formDataBody = 
-      `------${boundary}\r\n` +
-      `Content-Disposition: form-data; name="request"\r\n\r\n` +
-      `${JSON.stringify(payload)}\r\n` +
-      `------${boundary}--\r\n`;
+    // Use proper FormData API for correct multipart/form-data formatting
+    const { FormData } = await import('formdata-node');
+    const formData = new FormData();
+    formData.append('request', JSON.stringify(payload));
 
     console.log('🔄 Calling Shipable API:', `${SHIPABLE_API_BASE}/chat/open-playground`);
-    console.log('📦 Using multipart/form-data with boundary:', boundary);
+    console.log('📦 Using FormData API for multipart/form-data');
     console.log('📦 Complete payload object:', JSON.stringify(payload, null, 2));
-    console.log('📦 Complete form data body:');
-    console.log(formDataBody);
-    console.log('📦 Form data body length:', formDataBody.length);
 
     // Create AbortController for timeout handling
     const controller = new AbortController();
@@ -1183,12 +1168,12 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
         method: 'POST',
         headers: {
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          // Don't set Content-Type - FormData sets it automatically with correct boundary
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive'
         },
-        body: formDataBody,
+        body: formData,
         signal: controller.signal
       });
 
