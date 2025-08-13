@@ -207,10 +207,10 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
   })
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-gray-800">
+    <div className="flex-1 flex flex-col min-h-0 bg-gradient-to-br from-gray-900 via-gray-850 to-gray-900">
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="max-w-3xl mx-auto px-3 sm:px-4">
+      <div className="flex-1 overflow-y-auto min-h-0 chat-scroll scroll-smooth">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
           {messages.length === 0 && !isAnalyzing && (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
               <h2 className="text-2xl font-semibold text-white mb-2">
@@ -307,37 +307,64 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
             </div>
           ))}
 
-          {/* Advanced Streaming Message with Zero Flicker */}
+          {/* Advanced Streaming Message - Flicker-Free Design */}
           {isAnalyzing && (
-            <div className="group px-4 bg-gradient-to-r from-gray-700/80 via-gray-700/95 to-gray-700/80 backdrop-blur-sm will-change-transform">
-              <div className="max-w-3xl mx-auto py-6">
+            <div className="group px-4 py-6 bg-gradient-to-r from-gray-700/40 via-gray-700/60 to-gray-700/40 backdrop-blur-sm border-l-4 border-emerald-500/50 animate-fade-in">
+              <div className="max-w-3xl mx-auto">
                 <div className="flex space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className="relative w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center text-white text-sm font-bold shadow-lg will-change-transform">
-                      <div className="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg opacity-0 animate-pulse-subtle-glow"></div>
-                      <span className="relative z-10">AI</span>
+                  {/* AI Avatar with Enhanced Animation */}
+                  <div className="flex-shrink-0 relative">
+                    <div className="relative w-10 h-10 bg-gradient-to-br from-emerald-500 via-green-500 to-emerald-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-xl transform-gpu">
+                      {/* Breathing glow effect */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 to-green-400 rounded-xl opacity-0 animate-pulse-subtle-glow scale-110"></div>
+                      {/* Rotating border */}
+                      <div className="absolute inset-0 rounded-xl border-2 border-emerald-400/30 animate-spin-slow"></div>
+                      <span className="relative z-10 font-bold">AI</span>
+                    </div>
+                    {/* Status indicator */}
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-gray-700 animate-pulse">
+                      <div className="w-full h-full bg-emerald-400 rounded-full animate-ping"></div>
                     </div>
                   </div>
+
+                  {/* Content Area with Anti-Flicker Container */}
                   <div className="flex-1 min-w-0">
-                    <div className="text-gray-100 will-change-contents">
-                      <div className="min-h-[2rem] transition-all duration-200 ease-out">
+                    <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-2xl p-6 border border-gray-600/30 shadow-2xl transform-gpu">
+                      {/* Fixed height container to prevent layout shifts */}
+                      <div className="min-h-[3rem] flex flex-col justify-center">
                         {streamingMessage ? (
-                          <div className="transform-gpu will-change-transform">
-                            <div className="opacity-100 transition-opacity duration-200">
+                          <div className="space-y-2 animate-fade-in-up">
+                            {/* Streaming content with stable rendering */}
+                            <div className="prose prose-invert prose-sm max-w-none">
                               <MarkdownRenderer 
                                 content={streamingMessage} 
                                 streaming={true} 
                               />
                             </div>
+                            {/* Typing indicator for active streaming */}
+                            <div className="flex items-center space-x-2 mt-4 opacity-60">
+                              <div className="flex space-x-1">
+                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                              </div>
+                              <span className="text-xs text-gray-400">AI is thinking...</span>
+                            </div>
                           </div>
                         ) : (
-                          <div className="flex items-center space-x-3 py-2 min-h-[2rem]">
-                            <div className="flex space-x-1.5 items-center">
-                              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-streaming-dot" style={{ animationDelay: '0ms' }}></div>
-                              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-streaming-dot" style={{ animationDelay: '160ms' }}></div>
-                              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-streaming-dot" style={{ animationDelay: '320ms' }}></div>
+                          <div className="flex items-center justify-center space-x-4 py-4">
+                            {/* Enhanced loading animation */}
+                            <div className="relative">
+                              <div className="flex space-x-2">
+                                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-green-400 rounded-full animate-pulse-wave" style={{ animationDelay: '0ms' }}></div>
+                                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-green-400 rounded-full animate-pulse-wave" style={{ animationDelay: '200ms' }}></div>
+                                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-green-400 rounded-full animate-pulse-wave" style={{ animationDelay: '400ms' }}></div>
+                              </div>
                             </div>
-                            <div className="text-sm text-gray-300 font-medium animate-pulse-text">Analyzing your code...</div>
+                            <div className="text-center">
+                              <div className="text-emerald-400 font-semibold text-sm animate-pulse-text">Analyzing your smart contract</div>
+                              <div className="text-gray-400 text-xs mt-1">This may take a few moments...</div>
+                            </div>
                           </div>
                         )}
                       </div>
