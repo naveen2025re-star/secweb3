@@ -5,14 +5,65 @@ const LandingPage = ({ onGetStarted }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
+  const [isVisible, setIsVisible] = useState({});
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
+      const scrollY = window.scrollY;
+      setScrolled(scrollY > 20);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+
+    const throttledScroll = throttle(handleScroll, 16); // 60fps throttling
+    window.addEventListener('scroll', throttledScroll, { passive: true });
+    
+    return () => window.removeEventListener('scroll', throttledScroll);
   }, []);
+
+  // Intersection Observer for smooth animations
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsVisible(prev => ({ ...prev, [entry.target.id]: true }));
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '50px' }
+    );
+
+    document.querySelectorAll('[data-animate]').forEach((el) => {
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Throttle function for scroll performance
+  const throttle = (func, limit) => {
+    let inThrottle;
+    return function() {
+      const args = arguments;
+      const context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    };
+  };
+
+  // Smooth scroll handler
+  const smoothScrollTo = (elementId) => {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start',
+        inline: 'nearest'
+      });
+    }
+  };
 
   const features = [
     {
@@ -67,7 +118,7 @@ const LandingPage = ({ onGetStarted }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white overflow-x-hidden">
       {/* Animated background */}
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 opacity-20" style={{
@@ -92,9 +143,9 @@ const LandingPage = ({ onGetStarted }) => {
 
             {/* Desktop Menu */}
             <div className="hidden md:flex items-center space-x-8">
-              <a href="#features" className="hover:text-blue-400 transition-colors">Features</a>
-              <a href="#how-it-works" className="hover:text-blue-400 transition-colors">How it Works</a>
-              <a href="#pricing" className="hover:text-blue-400 transition-colors">Pricing</a>
+              <button onClick={() => smoothScrollTo('features')} className="hover:text-blue-400 transition-colors cursor-pointer">Features</button>
+              <button onClick={() => smoothScrollTo('how-it-works')} className="hover:text-blue-400 transition-colors cursor-pointer">How it Works</button>
+              <button onClick={() => smoothScrollTo('pricing')} className="hover:text-blue-400 transition-colors cursor-pointer">Pricing</button>
               <button
                 onClick={onGetStarted}
                 className="bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-2.5 rounded-xl font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 transform hover:scale-105"
@@ -160,13 +211,13 @@ const LandingPage = ({ onGetStarted }) => {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
             
-            <a
-              href="#how-it-works"
+            <button
+              onClick={() => smoothScrollTo('how-it-works')}
               className="px-8 py-4 rounded-xl font-semibold text-lg border border-gray-700 hover:border-gray-600 hover:bg-gray-800/50 transition-all duration-300 flex items-center space-x-2"
             >
               <span>Watch Demo</span>
               <ChevronRight className="w-5 h-5" />
-            </a>
+            </button>
           </div>
 
           {/* Stats */}
@@ -194,7 +245,7 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="container mx-auto px-6 py-20">
+      <section id="features" className="container mx-auto px-6 py-20" data-animate>
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             Powerful Features for
@@ -212,25 +263,26 @@ const LandingPage = ({ onGetStarted }) => {
             <div
               key={index}
               onMouseEnter={() => setActiveFeature(index)}
-              className={`relative p-6 rounded-2xl border transition-all duration-300 transform hover:scale-105 hover:-translate-y-2 ${
+              className={`relative p-6 rounded-2xl border transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 ${
                 activeFeature === index
                   ? 'bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-blue-500/50 shadow-2xl shadow-blue-500/20'
                   : 'bg-gray-800/30 border-gray-700/50 hover:border-gray-600'
-              }`}
-              style={{ animationDelay: `${index * 100}ms` }}
+              } ${isVisible.features ? 'animate-fade-in-up opacity-100' : 'opacity-0'}`}
+              style={{ animationDelay: `${index * 150}ms` }}
             >
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-r ${feature.gradient} p-3 mb-4`}>
+              <div className={`w-14 h-14 rounded-xl bg-gradient-to-r ${feature.gradient} p-3 mb-4 transition-transform duration-300 group-hover:scale-110`}>
                 <feature.icon className="w-full h-full text-white" />
               </div>
-              <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-              <p className="text-gray-400">{feature.description}</p>
+              <h3 className="text-xl font-bold mb-2 group-hover:text-white transition-colors">{feature.title}</h3>
+              <p className="text-gray-400 group-hover:text-gray-300 transition-colors">{feature.description}</p>
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
             </div>
           ))}
         </div>
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="container mx-auto px-6 py-20">
+      <section id="how-it-works" className="container mx-auto px-6 py-20" data-animate>
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             How It Works
@@ -256,7 +308,7 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="container mx-auto px-6 py-20">
+      <section id="pricing" className="container mx-auto px-6 py-20" data-animate>
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             Simple, Transparent Pricing

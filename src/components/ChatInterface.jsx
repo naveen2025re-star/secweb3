@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react'
+import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { Copy, Check } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -10,30 +10,40 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
   const messagesEndRef = useRef(null)
   const [copiedMessageId, setCopiedMessageId] = useState(null)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+  // Optimized scroll function with RAF
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ 
+          behavior: "smooth",
+          block: "end",
+          inline: "nearest"
+        })
+      })
+    }
+  }, [])
 
+  // Auto-scroll on new messages
   useEffect(() => {
     scrollToBottom()
-  }, [messages.length])
+  }, [messages.length, scrollToBottom])
 
-  // Debounced scroll for streaming
-  const debouncedScroll = useMemo(() => {
+  // Throttled scroll for streaming to prevent excessive calls
+  const debouncedStreamingScroll = useMemo(() => {
     let timeoutId
     return () => {
       clearTimeout(timeoutId)
       timeoutId = setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-      }, 100)
+        scrollToBottom()
+      }, 50) // Reduced delay for better responsiveness
     }
-  }, [])
+  }, [scrollToBottom])
 
   useEffect(() => {
     if (streamingMessage) {
-      debouncedScroll()
+      debouncedStreamingScroll()
     }
-  }, [streamingMessage, debouncedScroll])
+  }, [streamingMessage, debouncedStreamingScroll])
 
   const handleCopy = async (id, text) => {
     try {
@@ -45,12 +55,12 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
     }
   }
 
-  // Enhanced markdown renderer with better formatting
+  // Optimized markdown renderer with flicker prevention
   const MarkdownRenderer = React.memo(({ content, streaming = false }) => {
     if (!content && !streaming) return null
 
     return (
-      <div className="markdown-content prose prose-invert max-w-none break-words">
+      <div className="markdown-content prose prose-invert max-w-none break-words will-change-contents transform-gpu">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
@@ -297,35 +307,40 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
             </div>
           ))}
 
-          {/* Streaming Message with Smooth Transition */}
+          {/* Advanced Streaming Message with Zero Flicker */}
           {isAnalyzing && (
-            <div className="group px-4 bg-gradient-to-r from-gray-700 via-gray-700/95 to-gray-700 animate-fade-in">
+            <div className="group px-4 bg-gradient-to-r from-gray-700/80 via-gray-700/95 to-gray-700/80 backdrop-blur-sm will-change-transform">
               <div className="max-w-3xl mx-auto py-6">
                 <div className="flex space-x-4">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-sm flex items-center justify-center text-white text-sm font-bold shadow-lg animate-pulse-subtle">
-                      AI
+                    <div className="relative w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center text-white text-sm font-bold shadow-lg will-change-transform">
+                      <div className="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg opacity-0 animate-pulse-subtle-glow"></div>
+                      <span className="relative z-10">AI</span>
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-gray-100 transition-all duration-300 ease-out">
-                      {streamingMessage ? (
-                        <div className="animate-fade-in-up">
-                          <MarkdownRenderer 
-                            content={streamingMessage} 
-                            streaming={true} 
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-2 py-2">
-                          <div className="flex space-x-1.5">
-                            <span className="w-2 h-2 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-pulse-dot" style={{ animationDelay: '0ms' }}></span>
-                            <span className="w-2 h-2 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-pulse-dot" style={{ animationDelay: '200ms' }}></span>
-                            <span className="w-2 h-2 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-pulse-dot" style={{ animationDelay: '400ms' }}></span>
+                    <div className="text-gray-100 will-change-contents">
+                      <div className="min-h-[2rem] transition-all duration-200 ease-out">
+                        {streamingMessage ? (
+                          <div className="transform-gpu will-change-transform">
+                            <div className="opacity-100 transition-opacity duration-200">
+                              <MarkdownRenderer 
+                                content={streamingMessage} 
+                                streaming={true} 
+                              />
+                            </div>
                           </div>
-                          <span className="text-sm text-gray-400 ml-2 animate-fade-in">Analyzing your code...</span>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="flex items-center space-x-3 py-2 min-h-[2rem]">
+                            <div className="flex space-x-1.5 items-center">
+                              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-streaming-dot" style={{ animationDelay: '0ms' }}></div>
+                              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-streaming-dot" style={{ animationDelay: '160ms' }}></div>
+                              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-streaming-dot" style={{ animationDelay: '320ms' }}></div>
+                            </div>
+                            <div className="text-sm text-gray-300 font-medium animate-pulse-text">Analyzing your code...</div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
