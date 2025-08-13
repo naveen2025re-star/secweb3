@@ -449,7 +449,10 @@ app.post('/api/analyze', async (req, res) => {
     const currentUser = userResult.rows[0];
     console.log('✅ User found:', currentUser.id);
 
-    const { code, filename } = req.body || {};
+    const { code, filename, message } = req.body || {};
+    
+    // Accept either 'code' or 'message' field
+    const inputContent = code || message || '';
 
     // Validate request body
     if (!req.body) {
@@ -460,66 +463,75 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    // Validate input (allow any message, not just contract code)
-    if (!code || typeof code !== 'string' || code.trim().length === 0) {
-      console.warn('❌ Invalid message:', { 
-        codeLength: code?.length, 
-        codeType: typeof code 
+    // Validate input (accept any non-empty content)
+    if (!inputContent || typeof inputContent !== 'string' || inputContent.trim().length === 0) {
+      console.warn('❌ Invalid input:', { 
+        codeLength: code?.length,
+        messageLength: message?.length,
+        inputLength: inputContent?.length,
+        inputType: typeof inputContent 
       });
       return res.status(400).json({
         success: false,
-        error: 'Message is required and cannot be empty.'
+        error: 'Content is required and cannot be empty.'
       });
     }
 
-    console.log('✅ Message validated, length:', code.length);
+    console.log('✅ Content validated, length:', inputContent.length);
 
-    // Calculate scan cost (simplified: 1 credit per KB + base cost of 5)
-    const codeSizeKB = Math.ceil(code.length / 1024);
-    const scanCost = Math.max(5, codeSizeKB + 5);
+    // Determine if this is contract analysis or just chat
+    const isContractAnalysis = code && code.length > 50; // Contract analysis if 'code' field with substantial content
+    const scanCost = isContractAnalysis ? Math.max(5, Math.ceil(inputContent.length / 1024) + 5) : 0; // No cost for chat
 
-    console.log('💳 Credit calculation:', {
-      codeSizeKB,
+    console.log('💳 Content type determination:', {
+      isContractAnalysis,
+      hasCodeField: !!code,
+      contentLength: inputContent.length,
       scanCost,
       userBalance: currentUser.credits_balance,
       scanLimit: currentUser.credits_per_scan_limit
     });
 
-    // Check plan limits
-    if (scanCost > currentUser.credits_per_scan_limit) {
-      console.warn('❌ Scan cost exceeds limit:', scanCost, 'vs', currentUser.credits_per_scan_limit);
-      return res.status(403).json({
-        success: false,
-        error: `This scan requires ${scanCost} credits but your ${currentUser.plan_name} plan allows maximum ${currentUser.credits_per_scan_limit} credits per scan`,
-        scanCost,
-        availableCredits: currentUser.credits_balance,
-        planName: currentUser.plan_name,
-        creditError: true
-      });
+    // Only check credits for contract analysis, not for chat
+    if (isContractAnalysis) {
+      // Check plan limits
+      if (scanCost > currentUser.credits_per_scan_limit) {
+        console.warn('❌ Scan cost exceeds limit:', scanCost, 'vs', currentUser.credits_per_scan_limit);
+        return res.status(403).json({
+          success: false,
+          error: `This scan requires ${scanCost} credits but your ${currentUser.plan_name} plan allows maximum ${currentUser.credits_per_scan_limit} credits per scan`,
+          scanCost,
+          availableCredits: currentUser.credits_balance,
+          planName: currentUser.plan_name,
+          creditError: true
+        });
+      }
+
+      if (currentUser.credits_balance < scanCost) {
+        console.warn('❌ Insufficient credits:', currentUser.credits_balance, 'needed:', scanCost);
+        return res.status(402).json({
+          success: false,
+          error: `Insufficient credits. You need ${scanCost} credits but only have ${currentUser.credits_balance}`,
+          scanCost,
+          availableCredits: currentUser.credits_balance,
+          planName: currentUser.plan_name,
+          creditError: true
+        });
+      }
+    } else {
+      console.log('💬 Chat message - no credit check required');
     }
 
-    if (currentUser.credits_balance < scanCost) {
-      console.warn('❌ Insufficient credits:', currentUser.credits_balance, 'needed:', scanCost);
-      return res.status(402).json({
-        success: false,
-        error: `Insufficient credits. You need ${scanCost} credits but only have ${currentUser.credits_balance}`,
-        scanCost,
-        availableCredits: currentUser.credits_balance,
-        planName: currentUser.plan_name,
-        creditError: true
-      });
-    }
-
-    console.log('🔄 Attempting to deduct credits...');
-
-    // Deduct credits BEFORE calling Shipable API
+    // Only deduct credits for contract analysis, not for chat
     let deductResult;
-    try {
-      console.log('💳 Attempting credit deduction:', {
-        userId: decodedUser.userId,
-        scanCost,
-        currentBalance: currentUser.credits_balance
-      });
+    if (isContractAnalysis) {
+      console.log('🔄 Attempting to deduct credits for contract analysis...');
+      try {
+        console.log('💳 Attempting credit deduction:', {
+          userId: decodedUser.userId,
+          scanCost,
+          currentBalance: currentUser.credits_balance
+        });
 
       // Check if users table has required columns
       const tableCheck = await pool.query(`
@@ -562,32 +574,35 @@ app.post('/api/analyze', async (req, res) => {
         parameters: [scanCost, decodedUser.userId]
       });
 
-      return res.status(503).json({
-        success: false,
-        error: `Credit deduction failed: ${deductError.message}. Please contact support.`
-      });
+        return res.status(503).json({
+          success: false,
+          error: `Credit deduction failed: ${deductError.message}. Please contact support.`
+        });
+      }
+
+      if (!deductResult.rows.length || deductResult.rowCount === 0) {
+        console.warn('❌ Credit deduction failed - no rows affected:', {
+          rowCount: deductResult.rowCount,
+          rows: deductResult.rows.length,
+          userId: decodedUser.userId,
+          scanCost,
+          currentBalance: currentUser.credits_balance
+        });
+
+        return res.status(402).json({
+          success: false,
+          error: `Insufficient credits or concurrent modification. You need ${scanCost} credits but may have ${currentUser.credits_balance}. Please refresh and try again.`,
+          scanCost,
+          availableCredits: currentUser.credits_balance,
+          creditError: true
+        });
+      }
+
+      const newBalance = deductResult.rows[0].credits_balance;
+      console.log('✅ Credits successfully deducted. New balance:', newBalance);
+    } else {
+      console.log('💬 Chat message - skipping credit deduction');
     }
-
-    if (!deductResult.rows.length || deductResult.rowCount === 0) {
-      console.warn('❌ Credit deduction failed - no rows affected:', {
-        rowCount: deductResult.rowCount,
-        rows: deductResult.rows.length,
-        userId: decodedUser.userId,
-        scanCost,
-        currentBalance: currentUser.credits_balance
-      });
-
-      return res.status(402).json({
-        success: false,
-        error: `Insufficient credits or concurrent modification. You need ${scanCost} credits but may have ${currentUser.credits_balance}. Please refresh and try again.`,
-        scanCost,
-        availableCredits: currentUser.credits_balance,
-        creditError: true
-      });
-    }
-
-    const newBalance = deductResult.rows[0].credits_balance;
-    console.log('✅ Credits successfully deducted. New balance:', newBalance);
 
     // Validate Shipable API configuration
     if (!SHIPABLE_JWT_TOKEN) {
@@ -673,15 +688,16 @@ app.post('/api/analyze', async (req, res) => {
       // Store session info for streaming endpoint
       const sessionKey = sessionData.data.key;
       sessions.set(sessionKey, {
-        code,
+        code: inputContent, // Store the actual content (code or message)
         filename,
-        language: detectContractLanguage(code, filename),
-        lineCount: code.split('\n').length,
+        language: detectContractLanguage(inputContent, filename),
+        lineCount: inputContent.split('\n').length,
         shipableSessionId: sessionData.data.id,
         createdAt: new Date().toISOString(),
         userId: decodedUser.userId,
         scanCost,
-        creditsDeducted: scanCost
+        creditsDeducted: scanCost,
+        isContractAnalysis // Store whether this is analysis or chat
       });
 
       console.log('✅ Session stored for streaming:', sessionKey);
@@ -692,12 +708,13 @@ app.post('/api/analyze', async (req, res) => {
         sessionKey: sessionKey,
         creditInfo: {
           creditsDeducted: scanCost,
-          creditsRemaining: newBalance
+          creditsRemaining: isContractAnalysis ? (deductResult?.rows[0]?.credits_balance || currentUser.credits_balance - scanCost) : currentUser.credits_balance
         },
         metadata: {
-          language: detectContractLanguage(code, filename),
+          language: detectContractLanguage(inputContent, filename),
           filename: filename || null,
           scanCost,
+          isContractAnalysis,
           timestamp: new Date().toISOString(),
           shipableSessionId: sessionData.data.id
         }
