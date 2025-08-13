@@ -1127,7 +1127,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('   Prompt length:', analysisPrompt.length);
     console.log('   Session key:', sessionKey);
 
-    // Call Shipable AI streaming endpoint with correct format
+    // Call Shipable AI streaming endpoint with correct multipart/form-data format
     const payload = {
       sessionKey: sessionKey,
       messages: [
@@ -1136,6 +1136,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
           content: analysisPrompt
         }
       ],
+      token: SHIPABLE_JWT_TOKEN,  // Include token in the payload
       stream: true
     };
 
@@ -1146,8 +1147,16 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('   Stream enabled:', payload.stream);
     console.log('   Using JWT token:', SHIPABLE_JWT_TOKEN ? `${SHIPABLE_JWT_TOKEN.substring(0, 20)}...` : 'MISSING');
 
+    // Create FormData with boundary for multipart/form-data
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    const formDataBody = 
+      `------${boundary}\r\n` +
+      `Content-Disposition: form-data; name="request"\r\n\r\n` +
+      `${JSON.stringify(payload)}\r\n` +
+      `------${boundary}--`;
+
     console.log('🔄 Calling Shipable API:', `${SHIPABLE_API_BASE}/chat/open-playground`);
-    console.log('📦 Payload:', JSON.stringify(payload, null, 2));
+    console.log('📦 Using multipart/form-data with boundary:', boundary);
 
     // Create AbortController for timeout handling
     const controller = new AbortController();
@@ -1161,13 +1170,12 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': `multipart/form-data; boundary=----${boundary}`,
           'Accept': 'text/event-stream',
-          'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive'
         },
-        body: JSON.stringify(payload),
+        body: formDataBody,
         signal: controller.signal
       });
 
@@ -1188,7 +1196,6 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
-      const errorText = await response.text();
       const errorText = await response.text();
       console.error('❌ Shipable API error response:', {
         status: response.status,
