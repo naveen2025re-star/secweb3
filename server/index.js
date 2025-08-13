@@ -172,26 +172,6 @@ const detectContractLanguage = (code, filename = '') => {
   return 'Unknown';
 };
 
-const detectContractLanguage = (code, filename = '') => {
-  const lowerCode = code ? code.toLowerCase() : '';
-  const lowerFilename = filename ? filename.toLowerCase() : '';
-
-  if (lowerFilename.endsWith('.sol') || lowerCode.includes('pragma solidity') || lowerCode.includes('contract ')) {
-    return 'Solidity';
-  }
-  if (lowerFilename.endsWith('.vy') || lowerCode.includes('# @version') || lowerCode.includes('@external')) {
-    return 'Vyper';
-  }
-  if (lowerFilename.endsWith('.move') || lowerCode.includes('module ') || lowerCode.includes('public fun ')) {
-    return 'Move';
-  }
-  if (lowerFilename.endsWith('.cairo') || lowerCode.includes('#[contract]') || lowerCode.includes('func ')) {
-    return 'Cairo';
-  }
-
-  return 'Unknown';
-};
-
 const validateContractCode = (code) => {
   if (!code || typeof code !== 'string') {
     throw new Error('Contract code is required and must be a string');

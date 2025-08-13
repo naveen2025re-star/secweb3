@@ -32,7 +32,16 @@ export const analyzeContract = async (code, filename = null) => {
       })
     })
 
-    const data = await response.json()
+    if (!response.ok && response.status >= 500) {
+      throw new Error('Server is temporarily unavailable. Please try again in a moment.')
+    }
+
+    let data
+    try {
+      data = await response.json()
+    } catch (parseError) {
+      throw new Error('Invalid response from server. Please try again.')
+    }
 
     if (!response.ok) {
       // Handle specific error cases

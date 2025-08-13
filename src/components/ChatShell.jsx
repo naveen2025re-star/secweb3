@@ -143,9 +143,12 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
     setAnalyzing(true)
     setStreamingMessage('')
 
+    // Create unique loading message ID
+    const loadingMessageId = `loading_${Date.now()}`
+
     // Show immediate feedback
     const loadingMessage = {
-      id: Date.now() + 1000,
+      id: loadingMessageId,
       type: 'ai',
       content: '🔍 **Initializing scan and deducting credits...**\n\nPlease wait while we prepare your analysis.',
       timestamp: new Date().toLocaleTimeString(),
@@ -161,7 +164,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
 
     // Add user message immediately
     const userMessage = {
-      id: Date.now(),
+      id: `user_${Date.now()}`,
       type: 'user',
       content: message,
       timestamp: new Date().toLocaleTimeString(),
@@ -190,7 +193,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
 
       if (!sessionData.success) {
         // Remove loading message first
-        setMessages(prev => prev.filter(msg => msg.id !== Date.now() + 1000))
+        setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId))
 
         // Handle credit-related errors with upgrade button
         if (sessionData.creditError) {
@@ -203,7 +206,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
           errorMsg += `\n\n*Upgrade your plan to get more credits and higher scan limits.*`;
 
           const errorMessage = {
-            id: Date.now() + 2,
+            id: `error_${Date.now()}`,
             type: 'ai',
             content: errorMsg,
             timestamp: new Date().toLocaleTimeString(),
@@ -218,7 +221,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
       }
 
       // Remove loading message
-      setMessages(prev => prev.filter(msg => msg.id !== Date.now() + 1000))
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId))
 
       // Update credits balance if provided
       if (sessionData.creditInfo) {
@@ -257,7 +260,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
                 setStreamingMessage('')
 
                 const aiMessage = {
-                  id: Date.now() + 1,
+                  id: `ai_${Date.now()}`,
                   type: 'ai',
                   content: fullContent,
                   timestamp: new Date().toLocaleTimeString()
@@ -324,16 +327,20 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
       setStreamingMessage('')
 
       // Remove loading message
-      setMessages(prev => prev.filter(msg => msg.id !== Date.now() + 1000))
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId))
 
       const errorMessage = {
-        id: Date.now() + 2,
+        id: `error_${Date.now()}`,
         type: 'ai',
         content: `❌ **Analysis Failed**\n\n${error.message}\n\nPlease try again.`,
         timestamp: new Date().toLocaleTimeString(),
         error: true
       }
       setMessages(prev => [...prev, errorMessage])
+    } finally {
+      // Ensure cleanup happens regardless
+      setAnalyzing(false)
+      setStreamingMessage('')
     }
   }
 
