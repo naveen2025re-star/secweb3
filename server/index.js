@@ -886,6 +886,57 @@ app.get('/api/analyze/session/:sessionKey/status', async (req, res) => {
   }
 });
 
+// Test Shipable API connectivity
+app.get('/api/test-shipable', async (req, res) => {
+  try {
+    console.log('🧪 Testing Shipable API connectivity...');
+
+    if (!SHIPABLE_JWT_TOKEN) {
+      return res.json({
+        success: false,
+        error: 'Shipable JWT token not configured',
+        configured: false
+      });
+    }
+
+    const testResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ source: "test" }),
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    });
+
+    if (testResponse.ok) {
+      const data = await testResponse.json();
+      return res.json({
+        success: true,
+        message: 'Shipable API is accessible',
+        sessionCreated: !!data.data?.key,
+        configured: true
+      });
+    } else {
+      const errorText = await testResponse.text();
+      return res.json({
+        success: false,
+        error: `Shipable API error: ${testResponse.status}`,
+        details: errorText,
+        configured: true
+      });
+    }
+  } catch (error) {
+    console.error('🧪 Shipable API test failed:', error);
+    return res.json({
+      success: false,
+      error: error.message,
+      configured: !!SHIPABLE_JWT_TOKEN
+    });
+  }
+});
+
 // Test Shipable session creation endpoint
 app.post('/api/test-session', async (req, res) => {
   try {
@@ -1024,7 +1075,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       hasToken: !!SHIPABLE_JWT_TOKEN
     });
 
-    // Set up SSE headers
+    // Set up SSE headers and send immediate response to prevent 502
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -1033,6 +1084,34 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, Cache-Control',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Credentials': 'true'
+    });
+
+    // Send immediate acknowledgment to prevent 502 timeout
+    res.write(`data: ${JSON.stringify({ body: '🚀 **Starting Analysis**\n\nConnecting to AI service...' })}\n\n`);
+
+    // Add keep-alive mechanism
+    const keepAlive = setInterval(() => {
+      if (!res.destroyed) {
+        res.write(': keepalive\n\n');
+      }
+    }, 10000); // Send keep-alive every 10 seconds
+
+    // Cleanup function
+    const cleanup = () => {
+      clearInterval(keepAlive);
+      if (!res.destroyed) {
+        try {
+          res.end();
+        } catch (e) {
+          console.warn('Error ending response:', e.message);
+        }
+      }
+    };
+
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log('🔌 Client disconnected from stream');
+      cleanup();
     });
 
     // Use provided message and code, or fall back to session data
@@ -1070,22 +1149,46 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('🔄 Calling Shipable API:', `${SHIPABLE_API_BASE}/chat/open-playground`);
     console.log('📦 Payload:', JSON.stringify(payload, null, 2));
 
-    const response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
-        'Cache-Control': 'no-cache'
-      },
-      body: JSON.stringify(payload),
-      timeout: 30000 // 30 second timeout
-    });
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.warn('⏰ Shipable API call timed out, aborting...');
+      controller.abort();
+    }, 25000); // 25 second timeout (less than Railway's 30s limit)
+
+    let response;
+    try {
+      response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+          'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+
+      if (fetchError.name === 'AbortError') {
+        console.error('❌ Shipable API call timed out');
+        throw new Error('Analysis service timed out. Please try again with a shorter contract.');
+      }
+
+      console.error('❌ Shipable API fetch error:', fetchError);
+      throw new Error(`Failed to connect to analysis service: ${fetchError.message}`);
+    }
 
     console.log('📡 Shipable API response status:', response.status);
     console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
+      const errorText = await response.text();
       const errorText = await response.text();
       console.error('❌ Shipable API error response:', {
         status: response.status,
@@ -1093,7 +1196,15 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
         headers: Object.fromEntries(response.headers.entries()),
         body: errorText
       });
-      throw new Error(`Shipable API error: ${response.status} - ${errorText}`);
+
+      // Send error message to client and implement fallback
+      res.write(`data: ${JSON.stringify({ 
+        body: `❌ **Analysis Service Error**\n\nReceived ${response.status} error from AI service.\n\n**Fallback Analysis:**\n\nYour contract appears to be a ${sessionData.language} smart contract. Here are some general security considerations:\n\n- **Access Control**: Ensure proper role-based access controls\n- **Input Validation**: Validate all external inputs\n- **Reentrancy Protection**: Use appropriate guards for state changes\n- **Integer Overflow**: Check for arithmetic vulnerabilities\n\nFor detailed analysis, please try again or contact support.`
+      })}\n\n`);
+
+      cleanup();
+      res.write('data: [DONE]\n\n');
+      return;
     }
 
     if (!response.body) {
@@ -1111,10 +1222,23 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     let totalBytes = 0;
 
     try {
+      // Set a timeout for the entire streaming process
+      const streamTimeout = setTimeout(() => {
+        console.warn('⏰ Streaming timeout reached');
+        if (!res.destroyed) {
+          res.write(`data: ${JSON.stringify({ 
+            body: '\n\n⏰ **Analysis Timeout**\n\nThe analysis is taking longer than expected. The results may be incomplete.'
+          })}\n\n`);
+          res.write('data: [DONE]\n\n');
+          cleanup();
+        }
+      }, 20000); // 20 second streaming timeout
+
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
+          clearTimeout(streamTimeout);
           const streamDuration = Date.now() - streamStartTime;
           console.log('✅ Streaming completed:', {
             duration: `${streamDuration}ms`,
@@ -1170,8 +1294,11 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       throw streamError;
     }
 
-    res.write('data: [DONE]\n\n');
-    res.end();
+    // Send completion signal
+    if (!res.destroyed) {
+      res.write('data: [DONE]\n\n');
+      cleanup();
+    }
 
     // Mark session as completed
     const completedSession = sessions.get(sessionKey);
@@ -1233,17 +1360,20 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     }
 
     if (!res.headersSent) {
+      // Headers not sent yet, we can send JSON error
       res.status(502).json({
         success: false,
         error: 'Analysis streaming failed. Credits have been refunded.',
         details: error.message,
         refunded: !!failedSession
       });
-    } else {
+    } else if (!res.destroyed) {
+      // Headers already sent, send SSE error message
       res.write(`data: ${JSON.stringify({ 
-        error: 'Analysis streaming failed. Please try again.' 
+        body: `❌ **Analysis Failed**\n\n${error.message}\n\nCredits have been refunded. Please try again.`
       })}\n\n`);
-      res.end();
+      res.write('data: [DONE]\n\n');
+      cleanup();
     }
 
     // Clean up failed session
