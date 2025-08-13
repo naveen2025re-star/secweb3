@@ -109,16 +109,20 @@ const SecurityAuditResults = ({ content }) => {
 
   if (vulnerabilities.length === 0) {
     return (
-      <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center space-x-3">
-          <CheckCircle className="w-6 h-6 text-green-500" />
-          <div>
-            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">
-              Security Analysis Complete
-            </h3>
-            <p className="text-green-700 dark:text-green-300 mt-1">
-              No critical vulnerabilities detected in the smart contract code.
-            </p>
+      <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-2xl border border-green-200 dark:border-green-800/50 shadow-lg animate-fade-in">
+        <div className="text-center py-12">
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <Shield className="w-10 h-10 text-green-600 dark:text-green-400" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 tracking-tight">
+            No Vulnerabilities Detected
+          </h3>
+          <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed max-w-md mx-auto">
+            Your smart contract appears to be secure based on our comprehensive security analysis.
+          </p>
+          <div className="mt-6 inline-flex items-center px-4 py-2 bg-green-100 dark:bg-green-900/40 rounded-xl text-sm font-medium text-green-800 dark:text-green-200">
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Security Check Passed
           </div>
         </div>
       </div>
@@ -195,42 +199,44 @@ const SecurityAuditResults = ({ content }) => {
       {filteredVulnerabilities.map((vulnerability, index) => (
         <div
           key={vulnerability.id}
-          className={`border rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ${getSeverityColor(vulnerability.severity)}`}
+          className={`border rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 animate-fade-in ${getSeverityColor(vulnerability.severity)} overflow-hidden`}
         >
           {/* Issue Header */}
           <div
-            className="p-4 cursor-pointer"
+            className="p-5 cursor-pointer hover:bg-white/30 dark:hover:bg-gray-800/30 transition-colors duration-200"
             onClick={() => toggleIssue(vulnerability.id)}
           >
             <div className="flex items-start justify-between">
-              <div className="flex items-start space-x-3 flex-1">
-                {getSeverityIcon(vulnerability.severity)}
+              <div className="flex items-start space-x-4 flex-1 min-w-0">
+                <div className="flex-shrink-0 mt-1">
+                  {getSeverityIcon(vulnerability.severity)}
+                </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
-                    Issue #{index + 1}: {vulnerability.title}
+                  <h3 className="font-bold text-gray-900 dark:text-white text-base mb-3 break-words-safe">
+                    Issue #{index + 1}: <span className="text-overflow-ellipsis">{vulnerability.title}</span>
                   </h3>
-                  <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-600 dark:text-gray-400">
-                    <span className="flex items-center space-x-1">
-                      <span className="font-medium">Severity:</span>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSeverityBadgeColor(vulnerability.severity)}`}>
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium text-xs uppercase tracking-wide">Severity:</span>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${getSeverityBadgeColor(vulnerability.severity)}`}>
                         {vulnerability.severity}
                       </span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <span className="font-medium">Affected Chain/Standard:</span>
-                      <span>{vulnerability.chain}</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <FileText className="w-3 h-3" />
-                      <span className="font-medium">File/Line:</span>
-                      <span>{vulnerability.file}, {vulnerability.line}</span>
-                    </span>
+                    </div>
+                    <div className="flex items-center space-x-2 max-w-xs">
+                      <span className="font-medium text-xs uppercase tracking-wide">Chain:</span>
+                      <span className="text-xs truncate">{vulnerability.chain}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-3 h-3 flex-shrink-0" />
+                      <span className="font-medium text-xs uppercase tracking-wide">Location:</span>
+                      <span className="text-xs truncate">{vulnerability.file}, {vulnerability.line}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <button className="ml-4 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" aria-label="Toggle details">
+              <button className="ml-4 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0" aria-label="Toggle details">
                 <svg
-                  className={`w-4 h-4 text-gray-500 transition-transform ${expandedIssues.has(vulnerability.id) ? 'rotate-180' : ''}`}
+                  className={`w-5 h-5 text-gray-500 transition-transform duration-300 ${expandedIssues.has(vulnerability.id) ? 'rotate-180' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -243,80 +249,121 @@ const SecurityAuditResults = ({ content }) => {
 
           {/* Expanded Issue Details */}
           {expandedIssues.has(vulnerability.id) && (
-            <div className="border-t border-gray-200 dark:border-gray-600 p-4 bg-white/60 dark:bg-gray-800/60">
-              <div className="space-y-4">
+            <div className="border-t border-gray-200/50 dark:border-gray-600/50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm animate-scale-in">
+              <div className="p-6 space-y-6">
                 {/* Vulnerable Code Snippet */}
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2 flex items-center">
-                    <Code className="w-4 h-4 mr-2" />
-                    Vulnerable Code Snippet:
+                <div className="space-y-3">
+                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center text-base">
+                    <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center mr-3">
+                      <Code className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    </div>
+                    Vulnerable Code Snippet
                   </h4>
-                  <div className="bg-gray-900 text-gray-100 p-3 rounded-lg text-sm font-mono overflow-x-auto">
-                    <pre>{`// Example vulnerable code pattern
+                  <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow-lg">
+                    <div className="bg-gray-900 px-4 py-2 border-b border-gray-800">
+                      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Solidity</span>
+                    </div>
+                    <div className="p-4 overflow-x-auto">
+                      <pre className="text-sm text-gray-100 font-mono break-words-safe whitespace-pre-wrap">{`// Example vulnerable code pattern
 function vulnerableFunction() {
     // This is where the vulnerability occurs
     // Specific code would be extracted from analysis
 }`}</pre>
+                    </div>
                   </div>
                 </div>
 
                 {/* Description */}
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Description:</h4>
-                  <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
-                    {vulnerability.description || 'Detailed description of the security vulnerability and its potential impact on the smart contract.'}
-                  </p>
+                <div className="space-y-3">
+                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center text-base">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-3">
+                      <Info className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    Description
+                  </h4>
+                  <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/50 rounded-xl p-4">
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed break-words-safe">
+                      {vulnerability.description || 'Detailed description of the security vulnerability and its potential impact on the smart contract.'}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Impact */}
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Impact:</h4>
-                  <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
-                    This vulnerability could potentially lead to security issues if exploited. The specific impact depends on the vulnerability type and context.
-                  </p>
+                <div className="space-y-3">
+                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center text-base">
+                    <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center mr-3">
+                      <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                    </div>
+                    Potential Impact
+                  </h4>
+                  <div className="bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-800/50 rounded-xl p-4">
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed break-words-safe">
+                      This vulnerability could potentially lead to security issues if exploited. The specific impact depends on the vulnerability type and context within the smart contract implementation.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Remediation */}
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Remediation:</h4>
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
-                    <p className="text-green-800 dark:text-green-200 text-sm">
-                      Follow secure coding practices and implement the recommended fixes to address this vulnerability.
+                <div className="space-y-3">
+                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center text-base">
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mr-3">
+                      <Shield className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    </div>
+                    Remediation Steps
+                  </h4>
+                  <div className="bg-green-50/70 dark:bg-green-950/30 border border-green-200/60 dark:border-green-800/60 rounded-xl p-4">
+                    <p className="text-green-800 dark:text-green-200 leading-relaxed break-words-safe">
+                      Follow secure coding practices and implement the recommended fixes to address this vulnerability. Review the code thoroughly and apply industry-standard security patterns.
                     </p>
                   </div>
                 </div>
 
                 {/* Recommended Fix Code */}
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2 flex items-center">
-                    <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                    Recommended Fix:
+                <div className="space-y-3">
+                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center text-base">
+                    <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center mr-3">
+                      <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    Recommended Fix
                   </h4>
-                  <div className="bg-gray-900 text-gray-100 p-3 rounded-lg text-sm font-mono overflow-x-auto">
-                    <pre>{`// Secure implementation
+                  <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow-lg">
+                    <div className="bg-gray-900 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Secure Implementation</span>
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    </div>
+                    <div className="p-4 overflow-x-auto">
+                      <pre className="text-sm text-gray-100 font-mono break-words-safe whitespace-pre-wrap">{`// Secure implementation
 function secureFunction() {
     // Apply security best practices
     // Use recommended patterns and libraries
 }`}</pre>
+                    </div>
                   </div>
                 </div>
 
                 {/* Additional Resources */}
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2 flex items-center">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Additional Resources:
+                <div className="space-y-3">
+                  <h4 className="font-bold text-gray-900 dark:text-white flex items-center text-base">
+                    <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mr-3">
+                      <ExternalLink className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    Additional Resources
                   </h4>
-                  <div className="space-y-1 text-sm">
-                    <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline block">
-                      • OpenZeppelin Security Guidelines
-                    </a>
-                    <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline block">
-                      • Ethereum Smart Contract Security Best Practices
-                    </a>
-                    <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline block">
-                      • ConsenSys Security Tools and Resources
-                    </a>
+                  <div className="bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/50 dark:border-purple-800/50 rounded-xl p-4">
+                    <div className="grid gap-2">
+                      <a href="#" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center group">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></span>
+                        OpenZeppelin Security Guidelines
+                      </a>
+                      <a href="#" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center group">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></span>
+                        Ethereum Smart Contract Security Best Practices
+                      </a>
+                      <a href="#" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center group">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></span>
+                        ConsenSys Security Tools and Resources
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>

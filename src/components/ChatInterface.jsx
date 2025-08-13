@@ -213,16 +213,16 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
           )}
 
           {messages.map((message) => (
-            <div key={message.id} className={`group px-4 ${message.type === 'user' ? 'bg-gray-800' : 'bg-gray-700'}`}>
-              <div className="max-w-3xl mx-auto py-6">
-                <div className="flex space-x-4">
+            <div key={message.id} className={`group px-3 sm:px-6 lg:px-4 animate-fade-in ${message.type === 'user' ? 'bg-gradient-to-r from-blue-900/20 to-blue-800/20' : 'bg-gradient-to-r from-gray-700/30 to-gray-800/30'}`}>
+              <div className="max-w-4xl mx-auto py-4 sm:py-6">
+                <div className="flex space-x-3 sm:space-x-4">
                   <div className="flex-shrink-0">
                     {message.type === 'user' ? (
-                      <div className="w-8 h-8 bg-blue-600 rounded-sm flex items-center justify-center text-white text-sm font-medium">
+                      <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-lg">
                         You
                       </div>
                     ) : (
-                      <div className="w-8 h-8 bg-green-600 rounded-sm flex items-center justify-center text-white text-sm font-bold">
+                      <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-lg">
                         AI
                       </div>
                     )}
@@ -230,14 +230,22 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
                   <div className="flex-1 min-w-0">
                     <div className="text-gray-100">
                       {message.type === 'user' ? (
-                        <div>
-                          <p className="mb-3 whitespace-pre-wrap">{message.content}</p>
+                        <div className="space-y-4">
+                          <p className="text-base leading-relaxed whitespace-pre-wrap break-words-safe">{message.content}</p>
                           {message.code && (
-                            <div className="mt-3 p-3 bg-gray-900 rounded-lg border border-gray-600">
-                              <div className="text-xs text-gray-400 mb-2">Smart Contract Code:</div>
-                              <pre className="text-sm text-gray-200 font-mono overflow-x-auto">
-                                <code>{message.code.length > 200 ? message.code.substring(0, 200) + '...' : message.code}</code>
-                              </pre>
+                            <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow-lg">
+                              <div className="bg-gray-900 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Smart Contract Code</span>
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                  <span className="text-xs text-gray-500">{message.code.length} chars</span>
+                                </div>
+                              </div>
+                              <div className="p-4 overflow-x-auto">
+                                <pre className="text-sm text-gray-200 font-mono break-words-safe whitespace-pre-wrap">
+                                  <code>{message.code.length > 500 ? message.code.substring(0, 500) + '...\n\n/* Code truncated for display */' : message.code}</code>
+                                </pre>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -249,19 +257,28 @@ const ChatInterface = ({ messages, isAnalyzing, streamingMessage, onShowPlans })
                           />
                           {/* Upgrade button for credit errors */}
                           {message.showUpgradeButton && onShowPlans && (
-                            <div className="mt-4 pt-3 border-t border-gray-600">
-                              <button
-                                onClick={onShowPlans}
-                                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                              >
-                                ⚡ Upgrade Plan
-                              </button>
+                            <div className="mt-6 pt-4 border-t border-gray-600/50">
+                              <div className="bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-xl p-4 backdrop-blur-sm">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h4 className="text-white font-semibold mb-1">Need More Credits?</h4>
+                                    <p className="text-gray-300 text-sm">Upgrade to continue your security analysis</p>
+                                  </div>
+                                  <button
+                                    onClick={onShowPlans}
+                                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center space-x-2"
+                                  >
+                                    <span>⚡</span>
+                                    <span>Upgrade Now</span>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           )}
                           {/* Copy button */}
                           <button
-                            className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title={copiedMessageId === message.id ? 'Copied' : 'Copy'}
+                            className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-gray-800/50"
+                            title={copiedMessageId === message.id ? 'Copied!' : 'Copy message'}
                             aria-label="Copy response"
                             onClick={() => handleCopy(message.id, message.content)}
                           >

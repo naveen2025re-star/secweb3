@@ -5,6 +5,64 @@ All notable changes to SecWeb3 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2025-08-13
+
+### Added - Enhanced Backend & Frontend Integration
+- **Shipable AI Integration**: Complete integration with Shipable AI streaming API
+  - Proper multipart/form-data formatting using FormData API
+  - Dynamic boundary generation for API requests
+  - Session creation and streaming endpoints fully functional
+  - Real-time streaming analysis with proper error handling
+- **Smart Credits Management System**:
+  - Intelligent credit deduction logic (only for contract analysis >50 chars)
+  - Chat messages (like "HI") do not deduct credits
+  - Automatic credit refunds on analysis failures
+  - Real-time credit balance updates throughout the application
+  - Credits history tracking with visual notifications
+- **Enhanced User Experience**:
+  - Beautiful gradient-styled credits display in header
+  - Live credit balance updates with visual feedback
+  - Professional slide-in notifications for credit changes
+  - Modern pricing modal with Starter and Pro plans
+  - Improved upgrade button with gradient styling and icons
+
+### Added - New Pricing Plans
+- **SecWeb3 Starter Plan**: 
+  - US$0/month - Free tier
+  - 1000 Starter Credits included
+  - Shared Analysis Engine access
+  - Limited Scan Capacity
+  - Public Sessions Only
+- **SecWeb3 Pro Plan**: 
+  - US$15/month (US$180 billed annually)
+  - 5000 Monthly Credits
+  - Prioritized Scan Scheduling
+  - Amplified Analysis Capacity
+  - Private Sessions
+- **Modern Pricing Modal**: Beautiful, responsive design with gradient styling and feature comparisons
+
+### Fixed - Critical Backend Issues
+- **Syntax Error Resolution**: Fixed duplicate `errorText` declaration causing server crashes
+- **Message Validation**: Updated validation to accept any non-empty message content
+- **Frontend-Backend Communication**: Fixed message field handling to send correct content
+- **Timeout Removal**: Eliminated artificial 25-second timeouts for full streaming on Railway
+- **API Format**: Corrected OpenPlayground API calls to use proper multipart/form-data format
+- **Session Management**: Proper session creation and streaming flow implementation
+
+### Fixed - UI/UX Improvements  
+- **Credits Display**: Fixed header UI to show live credits balance instead of static "0"
+- **Loading Messages**: Replaced "Connecting to AI service..." with cleaner "Initializing..."
+- **Real-time Updates**: Credits now update immediately when deducted or refunded
+- **Visual Feedback**: Added comprehensive notification system for credit changes
+- **Responsive Design**: All new components work perfectly across desktop and mobile
+
+### Enhanced - Code Quality & Architecture
+- **Error Handling**: Comprehensive error handling with user-friendly messages
+- **State Management**: Improved real-time state updates for credits and user data
+- **Component Architecture**: Clean separation of concerns with reusable components
+- **API Integration**: Robust integration with external services and proper fallbacks
+- **Performance**: Optimized streaming and reduced unnecessary API calls
+
 ## [2.1.0] - 2025-01-12
 
 ### Added - Credit System & Plan Management

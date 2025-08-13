@@ -102,24 +102,24 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
   }
 
   return (
-    <div className="w-72 h-full bg-gray-950 backdrop-blur-sm text-white flex flex-col border-r border-gray-800">
+    <div className="w-72 h-full bg-gray-950/95 backdrop-blur-md text-white flex flex-col border-r border-gray-800/60 shadow-2xl animate-slide-in-left">
       {/* Header */}
-      <div className="p-4 border-b border-gray-800">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+      <div className="p-5 border-b border-gray-800/40">
+        <div className="flex items-center space-x-3 mb-5">
+          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
             <span className="text-sm font-bold text-white">S</span>
           </div>
           <div>
-            <h2 className="font-semibold text-white">SecWeb3</h2>
+            <h2 className="font-semibold text-white text-lg">SecWeb3</h2>
             <p className="text-xs text-gray-400">Smart Contract Auditor</p>
           </div>
         </div>
 
         <button
           onClick={onNewConversation}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-xl transition-all text-sm font-medium shadow-lg hover:shadow-xl"
+          className="w-full flex items-center space-x-3 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 border border-blue-500/30 hover:border-blue-400/50 text-white px-4 py-3 rounded-xl transition-all duration-300 font-medium text-sm group shadow-lg hover:shadow-xl backdrop-blur-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
           <span>New Analysis</span>
         </button>
       </div>
@@ -209,19 +209,21 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
       </div>
 
       {/* Conversations */}
-      <div className="flex-1 overflow-y-auto px-3">
+      <div className="flex-1 overflow-y-auto px-3 pb-4">
         {conversations.length === 0 ? (
-          <div className="text-center py-8">
-            <MessageSquare className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">No conversations yet</p>
-            <p className="text-xs text-gray-600 mt-1">Start by creating a new analysis</p>
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-800/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <MessageSquare className="w-8 h-8 text-gray-500" />
+            </div>
+            <p className="text-sm text-gray-400 font-medium">No conversations yet</p>
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">Start by creating a new analysis<br />to audit your smart contracts</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {Object.entries(groupedConversations).map(([timeGroup, convs]) => 
               convs.length > 0 && (
-              <div key={timeGroup} className="space-y-1">
-                <div className="text-xs text-gray-400 px-3 py-2 font-medium">
+              <div key={timeGroup} className="space-y-2">
+                <div className="text-xs text-gray-400 px-2 py-1 font-semibold uppercase tracking-wider">
                   {timeGroup}
                 </div>
                 {convs.map((conversation) => (
@@ -250,10 +252,10 @@ const Sidebar = ({ user, conversations, activeConversation, onNewConversation, o
                     ) : (
                       <button
                         onClick={() => onSelectConversation(conversation.id)}
-                        className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-all duration-200 relative ${
+                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-300 relative group ${
                           activeConversation === conversation.id
-                            ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-l-2 border-blue-500 text-white'
-                            : 'hover:bg-gray-800 text-gray-300 hover:translate-x-1'
+                            ? 'bg-gradient-to-r from-blue-600/25 to-purple-600/25 border border-blue-500/40 text-white shadow-lg backdrop-blur-sm'
+                            : 'hover:bg-gray-800/60 text-gray-300 hover:border-gray-700/50 border border-transparent'
                         }`}
                       >
                         <MessageSquare className={`w-4 h-4 flex-shrink-0 ${
