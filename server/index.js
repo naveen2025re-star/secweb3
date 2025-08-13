@@ -951,11 +951,20 @@ app.options('/api/analyze/stream/:sessionKey', (req, res) => {
 
 // Stream analysis results
 app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
+  const startTime = Date.now();
+  console.log('🎯 Stream endpoint hit:', {
+    sessionKey: req.params.sessionKey,
+    hasMessage: !!req.body?.message,
+    hasCode: !!req.body?.code,
+    timestamp: new Date().toISOString()
+  });
+
   try {
     const { sessionKey } = req.params;
     const { message, code } = req.body;
 
     if (!sessionKey) {
+      console.warn('❌ No session key provided');
       return res.status(400).json({
         success: false,
         error: 'Session key is required'
@@ -989,11 +998,30 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       });
     }
 
+    // Validate Shipable API configuration
+    if (!SHIPABLE_JWT_TOKEN) {
+      console.error('❌ Shipable JWT token not configured for streaming');
+      return res.status(503).json({
+        success: false,
+        error: 'Analysis service not properly configured'
+      });
+    }
+
+    if (!SHIPABLE_API_BASE) {
+      console.error('❌ Shipable API base URL not configured');
+      return res.status(503).json({
+        success: false,
+        error: 'Analysis service not properly configured'
+      });
+    }
+
     console.log('✅ Starting analysis stream for session:', sessionKey);
     console.log('📊 Session details:', {
       language: sessionData.language,
       scanCost: sessionData.scanCost,
-      creditsDeducted: sessionData.creditsDeducted
+      creditsDeducted: sessionData.creditsDeducted,
+      shipableApiBase: SHIPABLE_API_BASE,
+      hasToken: !!SHIPABLE_JWT_TOKEN
     });
 
     // Set up SSE headers
@@ -1029,54 +1057,81 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
           content: analysisPrompt
         }
       ],
-      token: SHIPABLE_JWT_TOKEN,
       stream: true
     };
 
     console.log('📦 Streaming payload prepared:');
     console.log('   Session key:', sessionKey);
     console.log('   Messages count:', payload.messages.length);
-    console.log('   Token present:', !!SHIPABLE_JWT_TOKEN);
+    console.log('   Message content length:', analysisPrompt.length);
     console.log('   Stream enabled:', payload.stream);
+    console.log('   Using JWT token:', SHIPABLE_JWT_TOKEN ? `${SHIPABLE_JWT_TOKEN.substring(0, 20)}...` : 'MISSING');
 
-    console.log('🔄 Calling:', `${SHIPABLE_API_BASE}/chat/open-playground`);
+    console.log('🔄 Calling Shipable API:', `${SHIPABLE_API_BASE}/chat/open-playground`);
+    console.log('📦 Payload:', JSON.stringify(payload, null, 2));
 
     const response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`
+        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+        'Cache-Control': 'no-cache'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      timeout: 30000 // 30 second timeout
     });
 
-    console.log('Shipable API response status:', response.status);
+    console.log('📡 Shipable API response status:', response.status);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Shipable API error response:', errorText);
+      console.error('❌ Shipable API error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorText
+      });
       throw new Error(`Shipable API error: ${response.status} - ${errorText}`);
     }
 
     if (!response.body) {
+      console.error('❌ No response body from Shipable API');
       throw new Error('No response body from Shipable API');
     }
+
+    console.log('✅ Starting to stream response...');
+    const streamStartTime = Date.now();
 
     // Stream the response
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let chunkCount = 0;
+    let totalBytes = 0;
 
     try {
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          console.log('Streaming completed');
+          const streamDuration = Date.now() - streamStartTime;
+          console.log('✅ Streaming completed:', {
+            duration: `${streamDuration}ms`,
+            chunks: chunkCount,
+            totalBytes: `${totalBytes} bytes`
+          });
           break;
         }
 
+        chunkCount++;
         const chunk = decoder.decode(value, { stream: true });
+        totalBytes += chunk.length;
+
+        if (chunkCount % 10 === 0) {
+          console.log(`📊 Streaming progress: ${chunkCount} chunks, ${totalBytes} bytes`);
+        }
+
         const lines = chunk.split('\n');
 
         for (const line of lines) {
@@ -1090,13 +1145,14 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
                   res.write(`data: ${JSON.stringify({ body: parsed.body })}\n\n`);
                 }
               } catch (parseError) {
-                console.error('Error parsing streaming data:', parseError, 'Data:', data);
+                console.warn('⚠️ Error parsing streaming data:', parseError.message, 'Data preview:', data.substring(0, 100));
                 // If parsing fails, try to forward the raw data
-                if (data) {
+                if (data && data.length > 0) {
                   res.write(`data: ${JSON.stringify({ body: data })}\n\n`);
                 }
               }
             } else if (data === '[DONE]') {
+              console.log('🏁 Received [DONE] signal');
               res.write('data: [DONE]\n\n');
               res.end();
               return;
@@ -1105,7 +1161,12 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
         }
       }
     } catch (streamError) {
-      console.error('Streaming read error:', streamError);
+      console.error('❌ Streaming read error:', {
+        error: streamError.message,
+        stack: streamError.stack,
+        chunks: chunkCount,
+        bytes: totalBytes
+      });
       throw streamError;
     }
 
@@ -1121,21 +1182,47 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('❌ Streaming error:', error);
-    console.error('Error stack:', error.stack);
+    const totalDuration = Date.now() - startTime;
+    console.error('❌ Streaming endpoint error:', {
+      sessionKey: req.params.sessionKey,
+      error: error.message,
+      stack: error.stack,
+      duration: `${totalDuration}ms`,
+      shipableConfigured: !!SHIPABLE_JWT_TOKEN,
+      timestamp: new Date().toISOString()
+    });
 
     // Try to refund credits if streaming fails after session creation
     const failedSession = sessions.get(sessionKey);
     if (failedSession && failedSession.userId && failedSession.scanCost && !failedSession.completed) {
       console.log('🔄 Attempting to refund credits due to streaming failure...');
       try {
-        const refundResult = await pool.query(`
-          UPDATE users 
-          SET credits_balance = credits_balance + $1,
-              credits_updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-          RETURNING credits_balance
-        `, [failedSession.scanCost, failedSession.userId]);
+        // Use same column check logic as in analyze endpoint
+        const tableCheck = await pool.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'credits_updated_at'
+        `);
+
+        const hasUpdatedAtColumn = tableCheck.rows.length > 0;
+
+        let refundResult;
+        if (hasUpdatedAtColumn) {
+          refundResult = await pool.query(`
+            UPDATE users 
+            SET credits_balance = credits_balance + $1,
+                credits_updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING credits_balance
+          `, [failedSession.scanCost, failedSession.userId]);
+        } else {
+          refundResult = await pool.query(`
+            UPDATE users 
+            SET credits_balance = credits_balance + $1
+            WHERE id = $2
+            RETURNING credits_balance
+          `, [failedSession.scanCost, failedSession.userId]);
+        }
 
         if (refundResult.rows.length > 0) {
           console.log('✅ Credits refunded for streaming failure. New balance:', refundResult.rows[0].credits_balance);
@@ -1146,9 +1233,11 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     }
 
     if (!res.headersSent) {
-      res.status(500).json({
+      res.status(502).json({
         success: false,
-        error: 'Analysis streaming failed. Credits have been refunded if applicable.'
+        error: 'Analysis streaming failed. Credits have been refunded.',
+        details: error.message,
+        refunded: !!failedSession
       });
     } else {
       res.write(`data: ${JSON.stringify({ 
