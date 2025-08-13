@@ -100,8 +100,8 @@ setInterval(() => {
   const oneHourAgo = Date.now() - (60 * 60 * 1000);
   let cleanedCount = 0;
 
-  for (const [sessionKey, session] of sessions.entries()) {
-    const sessionTime = new Date(session.createdAt).getTime();
+  for (const [sessionKey, sessionData] of sessions.entries()) {
+    const sessionTime = new Date(sessionData.createdAt).getTime();
     if (sessionTime < oneHourAgo) {
       sessions.delete(sessionKey);
       cleanedCount++;
@@ -262,11 +262,11 @@ app.get('/api/plans/current', async (req, res) => {
       return res.status(401).json({ error: 'Access token required' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const jwt = await import('jsonwebtoken');
-    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+    const authToken = authHeader.split(' ')[1];
+    const jwtModule = await import('jsonwebtoken');
+    const decodedToken = jwtModule.default.verify(authToken, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
 
-    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.userId]);
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decodedToken.userId]);
     if (!result.rows.length) {
       return res.status(401).json({ error: 'Invalid token' });
     }
@@ -330,8 +330,8 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    const token = authHeader.split(' ')[1];
-    if (!token) {
+    const accessToken = authHeader.split(' ')[1];
+    if (!accessToken) {
       console.warn('❌ No token in authorization header');
       return res.status(401).json({ 
         success: false, 
@@ -339,10 +339,10 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    let decoded;
+    let decodedUser;
     try {
-      const jwt = await import('jsonwebtoken');
-      decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+      const jwtLib = await import('jsonwebtoken');
+      decodedUser = jwtLib.default.verify(accessToken, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
     } catch (jwtError) {
       console.warn('❌ JWT verification failed:', jwtError.message);
       return res.status(401).json({ 
@@ -363,7 +363,7 @@ app.post('/api/analyze', async (req, res) => {
         FROM users u
         LEFT JOIN plans p ON u.plan_id = p.id
         WHERE u.id = $1
-      `, [decoded.userId]);
+      `, [decodedUser.userId]);
     } catch (dbError) {
       console.error('❌ Database error in analyze:', dbError);
       return res.status(503).json({
@@ -379,8 +379,8 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    const user = userResult.rows[0];
-    console.log('✅ User found:', user.id);
+    const currentUser = userResult.rows[0];
+    console.log('✅ User found:', currentUser.id);
 
     const { code, filename } = req.body || {};
 
@@ -414,31 +414,31 @@ app.post('/api/analyze', async (req, res) => {
     console.log('💳 Credit calculation:', {
       codeSizeKB,
       scanCost,
-      userBalance: user.credits_balance,
-      scanLimit: user.credits_per_scan_limit
+      userBalance: currentUser.credits_balance,
+      scanLimit: currentUser.credits_per_scan_limit
     });
 
     // Check plan limits
-    if (scanCost > user.credits_per_scan_limit) {
-      console.warn('❌ Scan cost exceeds limit:', scanCost, 'vs', user.credits_per_scan_limit);
+    if (scanCost > currentUser.credits_per_scan_limit) {
+      console.warn('❌ Scan cost exceeds limit:', scanCost, 'vs', currentUser.credits_per_scan_limit);
       return res.status(403).json({
         success: false,
-        error: `This scan requires ${scanCost} credits but your ${user.plan_name} plan allows maximum ${user.credits_per_scan_limit} credits per scan`,
+        error: `This scan requires ${scanCost} credits but your ${currentUser.plan_name} plan allows maximum ${currentUser.credits_per_scan_limit} credits per scan`,
         scanCost,
-        availableCredits: user.credits_balance,
-        planName: user.plan_name,
+        availableCredits: currentUser.credits_balance,
+        planName: currentUser.plan_name,
         creditError: true
       });
     }
 
-    if (user.credits_balance < scanCost) {
-      console.warn('❌ Insufficient credits:', user.credits_balance, 'needed:', scanCost);
+    if (currentUser.credits_balance < scanCost) {
+      console.warn('❌ Insufficient credits:', currentUser.credits_balance, 'needed:', scanCost);
       return res.status(402).json({
         success: false,
-        error: `Insufficient credits. You need ${scanCost} credits but only have ${user.credits_balance}`,
+        error: `Insufficient credits. You need ${scanCost} credits but only have ${currentUser.credits_balance}`,
         scanCost,
-        availableCredits: user.credits_balance,
-        planName: user.plan_name,
+        availableCredits: currentUser.credits_balance,
+        planName: currentUser.plan_name,
         creditError: true
       });
     }
@@ -454,7 +454,7 @@ app.post('/api/analyze', async (req, res) => {
             credits_updated_at = CURRENT_TIMESTAMP
         WHERE id = $2 AND credits_balance >= $1
         RETURNING credits_balance
-      `, [scanCost, decoded.userId]);
+      `, [scanCost, decodedUser.userId]);
     } catch (deductError) {
       console.error('❌ Credit deduction database error:', deductError);
       return res.status(503).json({
@@ -468,7 +468,7 @@ app.post('/api/analyze', async (req, res) => {
         success: false,
         error: `Credit deduction failed. Please refresh and try again`,
         scanCost,
-        availableCredits: user.credits_balance
+        availableCredits: currentUser.credits_balance
       });
     }
 
@@ -521,7 +521,7 @@ app.post('/api/analyze', async (req, res) => {
             SET credits_balance = credits_balance + $1,
                 credits_updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
-          `, [scanCost, decoded.userId]);
+          `, [scanCost, decodedUser.userId]);
           console.log('✅ Credits refunded successfully');
         } catch (refundError) {
           console.error('❌ Failed to refund credits:', refundError);
@@ -564,7 +564,7 @@ app.post('/api/analyze', async (req, res) => {
         lineCount: code.split('\n').length,
         shipableSessionId: sessionData.data.id,
         createdAt: new Date().toISOString(),
-        userId: decoded.userId,
+        userId: decodedUser.userId,
         scanCost,
         creditsDeducted: scanCost
       });
@@ -707,9 +707,9 @@ app.get('/api/debug/auth', async (req, res) => {
 app.get('/api/analyze/session/:sessionKey/status', async (req, res) => {
   try {
     const { sessionKey } = req.params;
-    const session = sessions.get(sessionKey);
+    const sessionData = sessions.get(sessionKey);
 
-    if (!session) {
+    if (!sessionData) {
       return res.status(404).json({
         success: false,
         error: 'Session not found'
@@ -719,15 +719,15 @@ app.get('/api/analyze/session/:sessionKey/status', async (req, res) => {
     // Get current user credit balance if authenticated
     let currentBalance = null;
     const authHeader = req.headers['authorization'];
-    if (authHeader && session.userId) {
+    if (authHeader && sessionData.userId) {
       try {
         const token = authHeader.split(' ')[1];
         if (token) {
           const jwt = await import('jsonwebtoken');
           const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
 
-          if (decoded.userId === session.userId) {
-            const userResult = await pool.query('SELECT credits_balance FROM users WHERE id = $1', [session.userId]);
+          if (decoded.userId === sessionData.userId) {
+            const userResult = await pool.query('SELECT credits_balance FROM users WHERE id = $1', [sessionData.userId]);
             if (userResult.rows.length > 0) {
               currentBalance = userResult.rows[0].credits_balance;
             }
@@ -742,13 +742,13 @@ app.get('/api/analyze/session/:sessionKey/status', async (req, res) => {
       success: true,
       session: {
         sessionKey,
-        language: session.language,
-        filename: session.filename,
-        scanCost: session.scanCost,
-        creditsDeducted: session.creditsDeducted,
-        completed: session.completed || false,
-        createdAt: session.createdAt,
-        completedAt: session.completedAt || null
+        language: sessionData.language,
+        filename: sessionData.filename,
+        scanCost: sessionData.scanCost,
+        creditsDeducted: sessionData.creditsDeducted,
+        completed: sessionData.completed || false,
+        createdAt: sessionData.createdAt,
+        completedAt: sessionData.completedAt || null
       },
       currentBalance
     });
@@ -839,14 +839,14 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     }
 
     // Validate authentication for streaming
-    const authHeader = req.headers['authorization'];
-    if (authHeader) {
+    const streamAuthHeader = req.headers['authorization'];
+    if (streamAuthHeader) {
       try {
-        const token = authHeader.split(' ')[1];
-        if (token) {
-          const jwt = await import('jsonwebtoken');
-          const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
-          console.log('✅ Streaming request authenticated for user:', decoded.userId);
+        const streamToken = streamAuthHeader.split(' ')[1];
+        if (streamToken) {
+          const streamJwt = await import('jsonwebtoken');
+          const streamDecoded = streamJwt.default.verify(streamToken, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+          console.log('✅ Streaming request authenticated for user:', streamDecoded.userId);
         }
       } catch (authError) {
         console.warn('⚠️ Streaming authentication failed:', authError.message);
@@ -854,9 +854,9 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       }
     }
 
-    const session = sessions.get(sessionKey);
+    const sessionData = sessions.get(sessionKey);
 
-    if (!session) {
+    if (!sessionData) {
       console.error('❌ Session not found:', sessionKey);
       console.error('Available sessions:', Array.from(sessions.keys()));
       return res.status(404).json({
@@ -867,9 +867,9 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
 
     console.log('✅ Starting analysis stream for session:', sessionKey);
     console.log('📊 Session details:', {
-      language: session.language,
-      scanCost: session.scanCost,
-      creditsDeducted: session.creditsDeducted
+      language: sessionData.language,
+      scanCost: sessionData.scanCost,
+      creditsDeducted: sessionData.creditsDeducted
     });
 
     // Set up SSE headers
@@ -884,7 +884,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     });
 
     // Use provided message and code, or fall back to session data
-    const analysisCode = code || session.code;
+    const analysisCode = code || sessionData.code;
     const analysisMessage = message || `Analyze this smart contract for security vulnerabilities`;
 
     // Create analysis prompt
@@ -989,10 +989,10 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     res.end();
 
     // Mark session as completed
-    const session = sessions.get(sessionKey);
-    if (session) {
-      session.completed = true;
-      session.completedAt = new Date().toISOString();
+    const completedSession = sessions.get(sessionKey);
+    if (completedSession) {
+      completedSession.completed = true;
+      completedSession.completedAt = new Date().toISOString();
       console.log('✅ Session completed successfully:', sessionKey);
     }
 
@@ -1001,8 +1001,8 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.error('Error stack:', error.stack);
 
     // Try to refund credits if streaming fails after session creation
-    const session = sessions.get(sessionKey);
-    if (session && session.userId && session.scanCost && !session.completed) {
+    const failedSession = sessions.get(sessionKey);
+    if (failedSession && failedSession.userId && failedSession.scanCost && !failedSession.completed) {
       console.log('🔄 Attempting to refund credits due to streaming failure...');
       try {
         const refundResult = await pool.query(`
@@ -1011,7 +1011,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
               credits_updated_at = CURRENT_TIMESTAMP
           WHERE id = $2
           RETURNING credits_balance
-        `, [session.scanCost, session.userId]);
+        `, [failedSession.scanCost, failedSession.userId]);
 
         if (refundResult.rows.length > 0) {
           console.log('✅ Credits refunded for streaming failure. New balance:', refundResult.rows[0].credits_balance);
@@ -1034,7 +1034,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     }
 
     // Clean up failed session
-    if (session) {
+    if (failedSession) {
       sessions.delete(sessionKey);
       console.log('🗑️ Cleaned up failed session:', sessionKey);
     }
@@ -1045,9 +1045,9 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
 app.get('/api/sessions/:sessionKey', async (req, res) => {
   try {
     const { sessionKey } = req.params;
-    const session = sessions.get(sessionKey);
+        const sessionInfo = sessions.get(sessionKey);
 
-    if (!session) {
+        if (!sessionInfo) {
       return res.status(404).json({
         success: false,
         error: 'Session not found locally'
