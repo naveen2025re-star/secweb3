@@ -1166,7 +1166,10 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
 
     console.log('🔄 Calling Shipable API:', `${SHIPABLE_API_BASE}/chat/open-playground`);
     console.log('📦 Using multipart/form-data with boundary:', boundary);
-    console.log('📦 Form data body preview:', formDataBody.substring(0, 200) + '...');
+    console.log('📦 Complete payload object:', JSON.stringify(payload, null, 2));
+    console.log('📦 Complete form data body:');
+    console.log(formDataBody);
+    console.log('📦 Form data body length:', formDataBody.length);
 
     // Create AbortController for timeout handling
     const controller = new AbortController();
