@@ -86,43 +86,29 @@ export const analyzeContract = async (code, filename = null) => {
   }
 }
 
-// Direct streaming analysis function
+// Direct streaming analysis function - uses backend streaming endpoint
 export const streamAnalysis = async (sessionKey, message, code) => {
   try {
-    console.log('🔄 Starting Shipable streaming analysis...')
+    console.log('🔄 Starting streaming analysis via backend...')
 
-    // Prepare the request data in the format expected by Shipable API
-    const requestData = {
-      sessionKey: sessionKey,
-      messages: [
-        {
-          role: "user",
-          content: code ? `${message}\n\nContract Code:\n${code}` : message
-        }
-      ],
-      token: SHIPABLE_JWT_TOKEN,
-      stream: true
-    }
-
-    // Create multipart form data
-    const formData = new FormData()
-    formData.append('request', JSON.stringify(requestData))
-
-    console.log('🔄 Sending request data:', requestData)
-
-    const response = await fetch(`${SHIPABLE_API_BASE}/chat/open-playground`, {
+    // Call the backend streaming endpoint which handles Shipable API integration
+    const response = await fetch(`${API_BASE_URL}/api/analyze/stream/${sessionKey}`, {
       method: 'POST',
       headers: {
         'Accept': 'text/event-stream',
-        'Cache-Control': 'no-cache'
-        // Note: Don't set Content-Type for FormData - browser will set it automatically with boundary
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
       },
-      body: formData
+      body: JSON.stringify({
+        message,
+        code
+      })
     })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('❌ Shipable streaming failed:', errorText)
+      console.error('❌ Backend streaming failed:', errorText)
       throw new Error(`Analysis streaming failed: ${response.status} - ${errorText}`)
     }
 

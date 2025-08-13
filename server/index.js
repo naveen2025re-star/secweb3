@@ -95,16 +95,32 @@ const SHIPABLE_JWT_TOKEN = JWT_TOKEN;
 // In-memory session storage (use Redis in production)
 const sessions = new Map();
 
+// Clean up old sessions every hour to prevent memory leaks
+setInterval(() => {
+  const oneHourAgo = Date.now() - (60 * 60 * 1000);
+  let cleanedCount = 0;
+
+  for (const [sessionKey, session] of sessions.entries()) {
+    const sessionTime = new Date(session.createdAt).getTime();
+    if (sessionTime < oneHourAgo) {
+      sessions.delete(sessionKey);
+      cleanedCount++;
+    }
+  }
+
+  if (cleanedCount > 0) {
+    console.log(`🧹 Cleaned up ${cleanedCount} old sessions. Active sessions: ${sessions.size}`);
+  }
+}, 60 * 60 * 1000); // Run every hour
+
 // Log initialization status (masking token for security)
 console.log('🔍 SHIPABLE_JWT_TOKEN found:', !!SHIPABLE_JWT_TOKEN);
 if (SHIPABLE_JWT_TOKEN) {
-  if (SHIPABLE_JWT_TOKEN) {
-    console.log(`🔑 Shipable JWT Token: ${SHIPABLE_JWT_TOKEN ? SHIPABLE_JWT_TOKEN.substring(0, 20) + '...' : 'NOT_SET'}`);
-  } else {
-    console.log('🔑 Shipable JWT Token: Not provided');
-  }
+  console.log(`🔑 Shipable JWT Token: ${SHIPABLE_JWT_TOKEN.substring(0, 20)}...`);
+  console.log('✅ Shipable AI integration enabled');
 } else {
   console.log('🔑 Shipable JWT Token: Not provided');
+  console.warn('⚠️  Analysis will fail without proper Shipable API configuration');
 }
 console.log(`🌐 Shipable API: ${SHIPABLE_API_BASE}`);
 
@@ -458,14 +474,30 @@ app.post('/api/analyze', async (req, res) => {
 
     const newBalance = deductResult.rows[0].credits_balance;
 
+    // Validate Shipable API configuration
+    if (!SHIPABLE_JWT_TOKEN) {
+      console.error('❌ SHIPABLE_JWT_TOKEN not configured');
+      // Refund credits since we can't process the analysis
+      await pool.query(`
+        UPDATE users 
+        SET credits_balance = credits_balance + $1,
+            credits_updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [scanCost, decoded.userId]);
+
+      return res.status(503).json({
+        success: false,
+        error: 'Analysis service not configured. Credits have been refunded.',
+        refunded: true
+      });
+    }
+
     // Now call Shipable API to create session
     console.log('🔄 Calling Shipable API...');
+    console.log('🔄 API Base:', SHIPABLE_API_BASE);
+    console.log('🔄 Token present:', !!SHIPABLE_JWT_TOKEN);
 
     try {
-      if (!SHIPABLE_JWT_TOKEN) {
-        throw new Error('Shipable API token not configured');
-      }
-
       const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
         method: 'POST',
         headers: {
@@ -523,10 +555,26 @@ app.post('/api/analyze', async (req, res) => {
         });
       }
 
+      // Store session info for streaming endpoint
+      const sessionKey = sessionData.data.key;
+      sessions.set(sessionKey, {
+        code,
+        filename,
+        language: detectContractLanguage(code, filename),
+        lineCount: code.split('\n').length,
+        shipableSessionId: sessionData.data.id,
+        createdAt: new Date().toISOString(),
+        userId: decoded.userId,
+        scanCost,
+        creditsDeducted: scanCost
+      });
+
+      console.log('✅ Session stored for streaming:', sessionKey);
+
       // Success - return session key and updated credit info
       return res.json({
         success: true,
-        sessionKey: sessionData.data.key,
+        sessionKey: sessionKey,
         creditInfo: {
           creditsDeducted: scanCost,
           creditsRemaining: newBalance
@@ -535,25 +583,38 @@ app.post('/api/analyze', async (req, res) => {
           language: detectContractLanguage(code, filename),
           filename: filename || null,
           scanCost,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          shipableSessionId: sessionData.data.id
         }
       });
 
     } catch (apiError) {
       // Refund credits on API error
-      await pool.query(`
-        UPDATE users 
-        SET credits_balance = credits_balance + $1,
-            credits_updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `, [scanCost, decoded.userId]);
+      console.log('🔄 Attempting to refund credits due to API error...');
+      try {
+        const refundResult = await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance + $1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+          RETURNING credits_balance
+        `, [scanCost, decoded.userId]);
+
+        if (refundResult.rows.length > 0) {
+          console.log('✅ Credits refunded successfully. New balance:', refundResult.rows[0].credits_balance);
+        }
+      } catch (refundError) {
+        console.error('❌ Failed to refund credits:', refundError);
+        // Continue with the error response but mention refund issue
+      }
 
       console.error('❌ Shipable API error:', apiError);
 
       return res.status(503).json({
         success: false,
         error: 'Analysis service error. Credits have been refunded.',
-        refunded: true
+        refunded: true,
+        originalError: apiError.message
       });
     }
 
@@ -577,7 +638,9 @@ app.get('/api/test', (req, res) => {
     success: true,
     message: 'Server is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    shipableConfigured: !!SHIPABLE_JWT_TOKEN,
+    useMockAnalysis: !SHIPABLE_JWT_TOKEN || process.env.USE_MOCK_ANALYSIS === 'true'
   });
 });
 
@@ -640,6 +703,65 @@ app.get('/api/debug/auth', async (req, res) => {
   }
 });
 
+// Check session status and verify credits were properly deducted
+app.get('/api/analyze/session/:sessionKey/status', async (req, res) => {
+  try {
+    const { sessionKey } = req.params;
+    const session = sessions.get(sessionKey);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Get current user credit balance if authenticated
+    let currentBalance = null;
+    const authHeader = req.headers['authorization'];
+    if (authHeader && session.userId) {
+      try {
+        const token = authHeader.split(' ')[1];
+        if (token) {
+          const jwt = await import('jsonwebtoken');
+          const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+
+          if (decoded.userId === session.userId) {
+            const userResult = await pool.query('SELECT credits_balance FROM users WHERE id = $1', [session.userId]);
+            if (userResult.rows.length > 0) {
+              currentBalance = userResult.rows[0].credits_balance;
+            }
+          }
+        }
+      } catch (authError) {
+        console.warn('Auth verification failed in session status:', authError.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      session: {
+        sessionKey,
+        language: session.language,
+        filename: session.filename,
+        scanCost: session.scanCost,
+        creditsDeducted: session.creditsDeducted,
+        completed: session.completed || false,
+        createdAt: session.createdAt,
+        completedAt: session.completedAt || null
+      },
+      currentBalance
+    });
+
+  } catch (error) {
+    console.error('Session status error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get session status'
+    });
+  }
+});
+
 // Test Shipable session creation endpoint
 app.post('/api/test-session', async (req, res) => {
   try {
@@ -692,198 +814,7 @@ app.post('/api/test-session', async (req, res) => {
   }
 });
 
-// Credit checking middleware (non-blocking)
-const checkCreditsMiddleware = async (req, res, next) => {
-  try {
-    // Import credit utilities dynamically to avoid startup errors
-    const { getUserPlan, computeScanCost, validateScanAgainstPlan, deductCredits } = await import('./planUtils.js');
-
-    // Check if user is authenticated
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) {
-      // Allow anonymous scans with basic limits
-      return next();
-    }
-
-    // Authenticate user
-    const token = authHeader.split(' ')[1];
-    const jwtModule = await import('jsonwebtoken');
-    const decoded = jwtModule.default.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-
-    // Get user plan
-    const userPlan = await getUserPlan(decoded.userId);
-    if (!userPlan) {
-      console.warn('User plan not found, allowing scan');
-      return next();
-    }
-
-    // Calculate scan cost
-    const { code, filename } = req.body;
-    const files = [{ 
-      name: filename || 'contract.sol', 
-      content: code, 
-      size: Buffer.byteLength(code, 'utf8') 
-    }];
-    const scanCost = computeScanCost({ files });
-
-    // Validate against plan limits
-    const validation = validateScanAgainstPlan(scanCost, 1, userPlan);
-
-    if (!validation.isValid) {
-      // Block scan if it exceeds plan limits
-      return res.status(402).json({
-        success: false,
-        error: 'Scan exceeds plan limits',
-        errors: validation.errors,
-        scanCost,
-        userCredits: userPlan.credits_balance,
-        planName: userPlan.plan_name
-      });
-    }
-
-    // Pre-deduct credits (will be finalized after successful scan)
-    try {
-      await deductCredits(decoded.userId, scanCost);
-      req.creditInfo = {
-        userId: decoded.userId,
-        scanCost,
-        originalBalance: userPlan.credits_balance,
-        newBalance: userPlan.credits_balance - scanCost
-      };
-      console.log(`💳 Credits deducted: ${scanCost} (${req.creditInfo.newBalance} remaining)`);
-    } catch (creditError) {
-      if (creditError.message === 'INSUFFICIENT_CREDITS') {
-        return res.status(402).json({
-          success: false,
-          error: 'Insufficient credits',
-          scanCost,
-          availableCredits: userPlan.credits_balance,
-          message: 'Please upgrade your plan to continue'
-        });
-      }
-      throw creditError;
-    }
-
-    next();
-  } catch (error) {
-    console.warn('Credit check failed (non-blocking):', error.message);
-    // Never block scans for credit system errors
-    next();
-  }
-};
-
-// Create new analysis session using Shipable API
-app.post('/api/analyze', checkCreditsMiddleware, async (req, res) => {
-  try {
-    console.log('Received analyze request:', { hasCode: !!req.body?.code, filename: req.body?.filename });
-
-    const { code, filename } = req.body;
-
-    // Validate input
-    if (!code) {
-      return res.status(400).json({
-        success: false,
-        error: 'Contract code is required'
-      });
-    }
-
-    validateContractCode(code);
-
-    const language = detectContractLanguage(code, filename);
-    const lineCount = code.split('\n').length;
-
-    console.log(`[${new Date().toISOString()}] Creating Shipable session for ${language} contract analysis: ${lineCount} lines`);
-
-    // Create session via Shipable API
-    console.log('🔄 Calling Shipable session endpoint:', `${SHIPABLE_API_BASE}/chat/sessions`);
-    console.log('📦 Session payload:', { source: "website" });
-    console.log('🔐 Using JWT token:', SHIPABLE_JWT_TOKEN ? 'Present' : 'Missing');
-
-    const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        source: "website"
-      })
-    });
-
-    console.log('🔄 Shipable session response status:', sessionResponse.status);
-    console.log('🔄 Shipable session response headers:', Object.fromEntries(sessionResponse.headers.entries()));
-
-    if (!sessionResponse.ok) {
-      const errorText = await sessionResponse.text();
-      console.error('❌ Shipable session creation failed:');
-      console.error('   Status:', sessionResponse.status);
-      console.error('   Status Text:', sessionResponse.statusText);
-      console.error('   Response:', errorText);
-      console.error('   URL:', `${SHIPABLE_API_BASE}/chat/sessions`);
-      throw new Error(`Failed to create Shipable session: ${sessionResponse.status} - ${errorText}`);
-    }
-
-    const sessionData = await sessionResponse.json();
-    console.log('✅ Shipable session created successfully:');
-    console.log('   Response:', JSON.stringify(sessionData, null, 2));
-
-    if (!sessionData || sessionData.statusCode !== 201 || !sessionData.data?.key) {
-      console.error('❌ Invalid session response structure:');
-      console.error('   Expected: { statusCode: 201, data: { key: "..." } }');
-      console.error('   Received:', sessionData);
-      throw new Error(`Invalid session response from Shipable API: ${JSON.stringify(sessionData)}`);
-    }
-
-    const sessionKey = sessionData.data.key;
-    console.log('🔑 Session key obtained:', sessionKey);
-
-    // Store session info locally for metadata
-    sessions.set(sessionKey, {
-      code,
-      filename,
-      language,
-      lineCount,
-      shipableSessionId: sessionData.data.id,
-      createdAt: new Date().toISOString()
-    });
-
-    console.log('Session created successfully:', sessionKey);
-
-    res.json({
-      success: true,
-      sessionKey,
-      metadata: {
-        language,
-        filename: filename || null,
-        lineCount,
-        timestamp: new Date().toISOString(),
-        shipableSessionId: sessionData.data.id
-      }
-    });
-
-  } catch (error) {
-    console.error('Analysis session creation error:', error);
-    console.error('Error stack:', error.stack);
-
-    let statusCode = 500;
-    let errorMessage = 'Internal server error during session creation';
-
-    if (error.message.includes('Contract code')) {
-      statusCode = 400;
-      errorMessage = error.message;
-    } else if (error.message.includes('Failed to create Shipable session')) {
-      statusCode = 502;
-      errorMessage = 'Failed to connect to AI service';
-    }
-
-    res.status(statusCode).json({
-      success: false,
-      error: errorMessage,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// Remove the duplicate endpoint - using the credit-integrated one above
 
 // Handle preflight requests for streaming endpoint
 app.options('/api/analyze/stream/:sessionKey', (req, res) => {
@@ -898,6 +829,7 @@ app.options('/api/analyze/stream/:sessionKey', (req, res) => {
 app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
   try {
     const { sessionKey } = req.params;
+    const { message, code } = req.body;
 
     if (!sessionKey) {
       return res.status(400).json({
@@ -906,18 +838,39 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       });
     }
 
+    // Validate authentication for streaming
+    const authHeader = req.headers['authorization'];
+    if (authHeader) {
+      try {
+        const token = authHeader.split(' ')[1];
+        if (token) {
+          const jwt = await import('jsonwebtoken');
+          const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+          console.log('✅ Streaming request authenticated for user:', decoded.userId);
+        }
+      } catch (authError) {
+        console.warn('⚠️ Streaming authentication failed:', authError.message);
+        // Continue anyway since session validation is primary check
+      }
+    }
+
     const session = sessions.get(sessionKey);
 
     if (!session) {
-      console.error('Session not found:', sessionKey);
+      console.error('❌ Session not found:', sessionKey);
       console.error('Available sessions:', Array.from(sessions.keys()));
       return res.status(404).json({
         success: false,
-        error: 'Session not found'
+        error: 'Session not found or expired. Please start a new analysis.'
       });
     }
 
-    console.log('Starting analysis stream for session:', sessionKey);
+    console.log('✅ Starting analysis stream for session:', sessionKey);
+    console.log('📊 Session details:', {
+      language: session.language,
+      scanCost: session.scanCost,
+      creditsDeducted: session.creditsDeducted
+    });
 
     // Set up SSE headers
     res.writeHead(200, {
@@ -930,19 +883,14 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
       'Access-Control-Allow-Credentials': 'true'
     });
 
+    // Use provided message and code, or fall back to session data
+    const analysisCode = code || session.code;
+    const analysisMessage = message || `Analyze this smart contract for security vulnerabilities`;
+
     // Create analysis prompt
-    const analysisPrompt = `Please analyze this ${session.language} smart contract for security vulnerabilities:
-
-\`\`\`${session.language.toLowerCase()}
-${session.code}
-\`\`\`
-
-Provide a comprehensive security audit including:
-1. Critical vulnerabilities
-2. High-risk issues  
-3. Medium-risk concerns
-4. Best practice recommendations
-5. Gas optimization opportunities`;
+    const analysisPrompt = analysisCode ? 
+      `${analysisMessage}\n\nContract Code:\n${analysisCode}` :
+      analysisMessage;
 
     console.log('🔄 Calling Shipable AI streaming endpoint...');
     console.log('   Prompt length:', analysisPrompt.length);
@@ -1014,10 +962,15 @@ Provide a comprehensive security audit including:
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.body) {
-                  res.write(`data: ${JSON.stringify({ content: parsed.body })}\n\n`);
+                  // Forward the data in the format expected by frontend
+                  res.write(`data: ${JSON.stringify({ body: parsed.body })}\n\n`);
                 }
               } catch (parseError) {
                 console.error('Error parsing streaming data:', parseError, 'Data:', data);
+                // If parsing fails, try to forward the raw data
+                if (data) {
+                  res.write(`data: ${JSON.stringify({ body: data })}\n\n`);
+                }
               }
             } else if (data === '[DONE]') {
               res.write('data: [DONE]\n\n');
@@ -1035,18 +988,55 @@ Provide a comprehensive security audit including:
     res.write('data: [DONE]\n\n');
     res.end();
 
+    // Mark session as completed
+    const session = sessions.get(sessionKey);
+    if (session) {
+      session.completed = true;
+      session.completedAt = new Date().toISOString();
+      console.log('✅ Session completed successfully:', sessionKey);
+    }
+
   } catch (error) {
-    console.error('Streaming error:', error);
+    console.error('❌ Streaming error:', error);
     console.error('Error stack:', error.stack);
+
+    // Try to refund credits if streaming fails after session creation
+    const session = sessions.get(sessionKey);
+    if (session && session.userId && session.scanCost && !session.completed) {
+      console.log('🔄 Attempting to refund credits due to streaming failure...');
+      try {
+        const refundResult = await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance + $1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+          RETURNING credits_balance
+        `, [session.scanCost, session.userId]);
+
+        if (refundResult.rows.length > 0) {
+          console.log('✅ Credits refunded for streaming failure. New balance:', refundResult.rows[0].credits_balance);
+        }
+      } catch (refundError) {
+        console.error('❌ Failed to refund credits for streaming failure:', refundError);
+      }
+    }
 
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        error: error.message
+        error: 'Analysis streaming failed. Credits have been refunded if applicable.'
       });
     } else {
-      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ 
+        error: 'Analysis streaming failed. Please try again.' 
+      })}\n\n`);
       res.end();
+    }
+
+    // Clean up failed session
+    if (session) {
+      sessions.delete(sessionKey);
+      console.log('🗑️ Cleaned up failed session:', sessionKey);
     }
   }
 });

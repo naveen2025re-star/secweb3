@@ -225,8 +225,14 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
 
       // Update credits balance if provided
       if (sessionData.creditInfo) {
-        setCreditsBalance(sessionData.creditInfo.creditsRemaining);
-        console.log(`💳 Credits deducted: ${sessionData.creditInfo.creditsDeducted}, Remaining: ${sessionData.creditInfo.creditsRemaining}`);
+        const newBalance = sessionData.creditInfo.creditsRemaining;
+        setCreditsBalance(newBalance);
+        console.log(`💳 Credits deducted: ${sessionData.creditInfo.creditsDeducted}, Remaining: ${newBalance}`);
+
+        // Also update the user plan in parent component if needed
+        if (typeof onCreditUpdate === 'function') {
+          onCreditUpdate(newBalance);
+        }
       }
 
       // Step 2: Start streaming
