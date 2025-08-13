@@ -231,6 +231,41 @@ const initializeDatabase = async () => {
         console.warn('⚠️ Plans system migration skipped:', error.message);
       }
 
+      // Verify required tables exist
+      console.log('🔄 Verifying database schema...');
+      try {
+        const tableCheck = await pool.query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name IN ('users', 'plans', 'conversations')
+        `);
+
+        const existingTables = tableCheck.rows.map(r => r.table_name);
+        console.log('📊 Existing tables:', existingTables);
+
+        // Check users table columns
+        const userColumnsCheck = await pool.query(`
+          SELECT column_name, data_type 
+          FROM information_schema.columns 
+          WHERE table_name = 'users'
+        `);
+
+        console.log('👤 Users table columns:', userColumnsCheck.rows.map(r => `${r.column_name} (${r.data_type})`));
+
+        // Ensure credits_balance exists
+        const hasCreditsBalance = userColumnsCheck.rows.some(r => r.column_name === 'credits_balance');
+        if (!hasCreditsBalance) {
+          console.log('🔄 Adding missing credits_balance column...');
+          await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_balance INTEGER DEFAULT 100');
+        }
+
+        console.log('✅ Database schema verified');
+      } catch (schemaError) {
+        console.warn('⚠️ Schema verification failed:', schemaError.message);
+        // Continue anyway - tables might exist with different schema
+      }
+
       console.log('✅ Database initialized successfully');
     } else {
       console.error('❌ Failed to connect to database');
@@ -321,6 +356,18 @@ app.post('/api/analyze', async (req, res) => {
   try {
     console.log('🔄 /api/analyze endpoint hit');
 
+    // Test database connection first
+    try {
+      await pool.query('SELECT 1');
+      console.log('✅ Database connection verified');
+    } catch (connError) {
+      console.error('❌ Database connection failed:', connError.message);
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection unavailable. Please try again in a moment.'
+      });
+    }
+
     const authHeader = req.headers['authorization'];
     if (!authHeader) {
       console.warn('❌ No authorization header');
@@ -354,6 +401,21 @@ app.post('/api/analyze', async (req, res) => {
     // Get user and plan info with error handling
     let userResult;
     try {
+      console.log('🔍 Fetching user data for ID:', decodedUser.userId);
+
+      // First check if user exists
+      const userCheck = await pool.query('SELECT id, credits_balance FROM users WHERE id = $1', [decodedUser.userId]);
+
+      if (!userCheck.rows.length) {
+        console.warn('❌ User not found in database:', decodedUser.userId);
+        return res.status(401).json({
+          success: false,
+          error: 'User not found. Please sign in again.'
+        });
+      }
+
+      console.log('✅ User found, fetching full plan data...');
+
       userResult = await pool.query(`
         SELECT u.*, 
                COALESCE(p.credits_per_month, 100) as credits_per_month,
@@ -365,10 +427,15 @@ app.post('/api/analyze', async (req, res) => {
         WHERE u.id = $1
       `, [decodedUser.userId]);
     } catch (dbError) {
-      console.error('❌ Database error in analyze:', dbError);
+      console.error('❌ Database error in analyze:', {
+        error: dbError.message,
+        code: dbError.code,
+        detail: dbError.detail,
+        stack: dbError.stack
+      });
       return res.status(503).json({
         success: false,
-        error: 'Database temporarily unavailable. Please try again.'
+        error: `Database error: ${dbError.message}. Please try again.`
       });
     }
 
@@ -448,31 +515,79 @@ app.post('/api/analyze', async (req, res) => {
     // Deduct credits BEFORE calling Shipable API
     let deductResult;
     try {
-      deductResult = await pool.query(`
-        UPDATE users 
-        SET credits_balance = credits_balance - $1,
-            credits_updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2 AND credits_balance >= $1
-        RETURNING credits_balance
-      `, [scanCost, decodedUser.userId]);
+      console.log('💳 Attempting credit deduction:', {
+        userId: decodedUser.userId,
+        scanCost,
+        currentBalance: currentUser.credits_balance
+      });
+
+      // Check if users table has required columns
+      const tableCheck = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name IN ('credits_balance', 'credits_updated_at')
+      `);
+
+      console.log('📊 Available columns:', tableCheck.rows.map(r => r.column_name));
+
+      // Use simpler query if credits_updated_at doesn't exist
+      const hasUpdatedAtColumn = tableCheck.rows.some(r => r.column_name === 'credits_updated_at');
+
+      if (hasUpdatedAtColumn) {
+        deductResult = await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance - $1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2 AND credits_balance >= $1
+          RETURNING credits_balance
+        `, [scanCost, decodedUser.userId]);
+      } else {
+        console.log('⚠️ Using simple credit deduction (no updated_at column)');
+        deductResult = await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance - $1
+          WHERE id = $2 AND credits_balance >= $1
+          RETURNING credits_balance
+        `, [scanCost, decodedUser.userId]);
+      }
+
+      console.log('✅ Credit deduction query executed. Affected rows:', deductResult.rowCount);
+
     } catch (deductError) {
-      console.error('❌ Credit deduction database error:', deductError);
+      console.error('❌ Credit deduction database error:', {
+        message: deductError.message,
+        code: deductError.code,
+        detail: deductError.detail,
+        query: deductError.query,
+        parameters: [scanCost, decodedUser.userId]
+      });
+
       return res.status(503).json({
         success: false,
-        error: 'Database error during credit deduction. Please try again.'
+        error: `Credit deduction failed: ${deductError.message}. Please contact support.`
       });
     }
 
-    if (!deductResult.rows.length) {
+    if (!deductResult.rows.length || deductResult.rowCount === 0) {
+      console.warn('❌ Credit deduction failed - no rows affected:', {
+        rowCount: deductResult.rowCount,
+        rows: deductResult.rows.length,
+        userId: decodedUser.userId,
+        scanCost,
+        currentBalance: currentUser.credits_balance
+      });
+
       return res.status(402).json({
         success: false,
-        error: `Credit deduction failed. Please refresh and try again`,
+        error: `Insufficient credits or concurrent modification. You need ${scanCost} credits but may have ${currentUser.credits_balance}. Please refresh and try again.`,
         scanCost,
-        availableCredits: currentUser.credits_balance
+        availableCredits: currentUser.credits_balance,
+        creditError: true
       });
     }
 
     const newBalance = deductResult.rows[0].credits_balance;
+    console.log('✅ Credits successfully deducted. New balance:', newBalance);
 
     // Validate Shipable API configuration
     if (!SHIPABLE_JWT_TOKEN) {
@@ -633,12 +748,21 @@ app.post('/api/analyze', async (req, res) => {
 });
 
 // Add a simple test endpoint to verify server is working
-app.get('/api/test', (req, res) => {
+app.get('/api/test', async (req, res) => {
+  let dbStatus = 'unknown';
+  try {
+    await pool.query('SELECT 1');
+    dbStatus = 'connected';
+  } catch (dbError) {
+    dbStatus = `error: ${dbError.message}`;
+  }
+
   res.json({
     success: true,
     message: 'Server is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
+    database: dbStatus,
     shipableConfigured: !!SHIPABLE_JWT_TOKEN,
     useMockAnalysis: !SHIPABLE_JWT_TOKEN || process.env.USE_MOCK_ANALYSIS === 'true'
   });
