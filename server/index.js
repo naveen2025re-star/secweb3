@@ -303,8 +303,11 @@ console.log('✅ Basic plan routes enabled directly');
 // Contract analysis endpoint with credit deduction
 app.post('/api/analyze', async (req, res) => {
   try {
+    console.log('🔄 /api/analyze endpoint hit');
+
     const authHeader = req.headers['authorization'];
     if (!authHeader) {
+      console.warn('❌ No authorization header');
       return res.status(401).json({ 
         success: false, 
         error: 'Authentication required' 
@@ -312,8 +315,25 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const jwt = await import('jsonwebtoken');
-    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+    if (!token) {
+      console.warn('❌ No token in authorization header');
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Authentication token missing' 
+      });
+    }
+
+    let decoded;
+    try {
+      const jwt = await import('jsonwebtoken');
+      decoded = jwt.default.verify(token, process.env.JWT_SECRET || process.env.SHIPABLE_JWT_TOKEN || 'your-secret-key');
+    } catch (jwtError) {
+      console.warn('❌ JWT verification failed:', jwtError.message);
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Invalid authentication token' 
+      });
+    }
 
     // Get user and plan info with error handling
     let userResult;
@@ -344,49 +364,88 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    const { code, filename } = req.body;
+    console.log('✅ User found:', user.id);
+
+    const { code, filename } = req.body || {};
+
+    // Validate request body
+    if (!req.body) {
+      console.warn('❌ No request body');
+      return res.status(400).json({
+        success: false,
+        error: 'Request body is required'
+      });
+    }
 
     // Validate contract code
     if (!code || typeof code !== 'string' || code.trim().length < 10) {
+      console.warn('❌ Invalid contract code:', { 
+        codeLength: code?.length, 
+        codeType: typeof code 
+      });
       return res.status(400).json({
         success: false,
-        error: 'Invalid contract code provided'
+        error: 'Invalid contract code provided. Code must be at least 10 characters.'
       });
     }
+
+    console.log('✅ Contract code validated, length:', code.length);
 
     // Calculate scan cost (simplified: 1 credit per KB + base cost of 5)
     const codeSizeKB = Math.ceil(code.length / 1024);
     const scanCost = Math.max(5, codeSizeKB + 5);
 
+    console.log('💳 Credit calculation:', {
+      codeSizeKB,
+      scanCost,
+      userBalance: user.credits_balance,
+      scanLimit: user.credits_per_scan_limit
+    });
+
     // Check plan limits
     if (scanCost > user.credits_per_scan_limit) {
+      console.warn('❌ Scan cost exceeds limit:', scanCost, 'vs', user.credits_per_scan_limit);
       return res.status(403).json({
         success: false,
         error: `This scan requires ${scanCost} credits but your ${user.plan_name} plan allows maximum ${user.credits_per_scan_limit} credits per scan`,
         scanCost,
         availableCredits: user.credits_balance,
-        planName: user.plan_name
+        planName: user.plan_name,
+        creditError: true
       });
     }
 
     if (user.credits_balance < scanCost) {
+      console.warn('❌ Insufficient credits:', user.credits_balance, 'needed:', scanCost);
       return res.status(402).json({
         success: false,
         error: `Insufficient credits. You need ${scanCost} credits but only have ${user.credits_balance}`,
         scanCost,
         availableCredits: user.credits_balance,
-        planName: user.plan_name
+        planName: user.plan_name,
+        creditError: true
       });
     }
 
+    console.log('🔄 Attempting to deduct credits...');
+
     // Deduct credits BEFORE calling Shipable API
-    const deductResult = await pool.query(`
-      UPDATE users 
-      SET credits_balance = credits_balance - $1,
-          credits_updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2 AND credits_balance >= $1
-      RETURNING credits_balance
-    `, [scanCost, decoded.userId]);
+    let deductResult;
+    try {
+      deductResult = await pool.query(`
+        UPDATE users 
+        SET credits_balance = credits_balance - $1,
+            credits_updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2 AND credits_balance >= $1
+        RETURNING credits_balance
+      `, [scanCost, decoded.userId]);
+    } catch (deductError) {
+      console.error('❌ Credit deduction database error:', deductError);
+      return res.status(503).json({
+        success: false,
+        error: 'Database error during credit deduction. Please try again.'
+      });
+    }
 
     if (!deductResult.rows.length) {
       return res.status(402).json({
@@ -400,7 +459,13 @@ app.post('/api/analyze', async (req, res) => {
     const newBalance = deductResult.rows[0].credits_balance;
 
     // Now call Shipable API to create session
+    console.log('🔄 Calling Shipable API...');
+
     try {
+      if (!SHIPABLE_JWT_TOKEN) {
+        throw new Error('Shipable API token not configured');
+      }
+
       const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
         method: 'POST',
         headers: {
@@ -413,14 +478,22 @@ app.post('/api/analyze', async (req, res) => {
         })
       });
 
+      console.log('🔄 Shipable API response status:', sessionResponse.status);
+
       if (!sessionResponse.ok) {
         // Refund credits on API failure
-        await pool.query(`
-          UPDATE users 
-          SET credits_balance = credits_balance + $1,
-              credits_updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-        `, [scanCost, decoded.userId]);
+        console.log('🔄 Refunding credits due to API failure...');
+        try {
+          await pool.query(`
+            UPDATE users 
+            SET credits_balance = credits_balance + $1,
+                credits_updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+          `, [scanCost, decoded.userId]);
+          console.log('✅ Credits refunded successfully');
+        } catch (refundError) {
+          console.error('❌ Failed to refund credits:', refundError);
+        }
 
         const errorText = await sessionResponse.text();
         console.error('❌ Shipable session creation failed:', errorText);
@@ -486,11 +559,26 @@ app.post('/api/analyze', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Analyze endpoint error:', error);
+    console.error('Error stack:', error.stack);
+
+    // Return more specific error information for debugging
     return res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: process.env.NODE_ENV === 'development' 
+        ? `Server error: ${error.message}` 
+        : 'Internal server error. Please try again.'
     });
   }
+});
+
+// Add a simple test endpoint to verify server is working
+app.get('/api/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
 });
 
 // Health check endpoint
