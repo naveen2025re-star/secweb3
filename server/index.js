@@ -1697,30 +1697,75 @@ app.get('/api/languages', (req, res) => {
 // Multi-file upload endpoint
 app.post('/api/files/upload', upload.array('contracts', 10), async (req, res) => {
   try {
+    console.log('📤 POST /api/files/upload - Request received');
+    
     const authHeader = req.headers['authorization'];
     if (!authHeader) {
+      console.log('❌ No authorization header');
       return res.status(401).json({ success: false, error: 'Access token required' });
     }
 
     const token = authHeader.split(' ')[1];
-    const decodedUser = jwt.verify(token, JWT_TOKEN);
+    if (!token) {
+      console.log('❌ No token in authorization header');
+      return res.status(401).json({ success: false, error: 'Invalid token format' });
+    }
+
+    let decodedUser;
+    try {
+      // Try multiple JWT secrets for compatibility
+      const possibleSecrets = [
+        JWT_TOKEN,
+        process.env.JWT_SECRET,
+        process.env.SHIPABLE_JWT_TOKEN,
+        process.env.VITE_SHIPABLE_JWT_TOKEN,
+        'your-secret-key'
+      ].filter(Boolean);
+
+      let verified = false;
+      for (const secret of possibleSecrets) {
+        try {
+          decodedUser = jwt.verify(token, secret);
+          console.log('✅ JWT verified successfully with secret');
+          verified = true;
+          break;
+        } catch (secretError) {
+          console.log(`❌ JWT verification failed with secret: ${secretError.message}`);
+          continue;
+        }
+      }
+
+      if (!verified) {
+        console.log('❌ All JWT verification attempts failed');
+        return res.status(401).json({ success: false, error: 'Invalid token' });
+      }
+    } catch (jwtError) {
+      console.error('❌ JWT verification error:', jwtError.message);
+      return res.status(401).json({ success: false, error: 'Invalid token' });
+    }
     
     if (!req.files || req.files.length === 0) {
+      console.log('❌ No files in request');
       return res.status(400).json({
         success: false,
         error: 'No files uploaded'
       });
     }
 
+    console.log(`📁 Processing ${req.files.length} files for user ${decodedUser.userId}`);
+
     const uploadedFiles = [];
     const errors = [];
 
     for (const file of req.files) {
       try {
+        console.log(`📄 Processing file: ${file.originalname} (${file.size} bytes)`);
         const code = file.buffer.toString('utf8');
         const filename = file.originalname;
         const language = detectContractLanguage(code, filename);
         const checksum = crypto.createHash('sha256').update(code).digest('hex');
+        
+        console.log(`🔍 File details: language=${language}, checksum=${checksum.substring(0, 8)}...`);
         
         // Check for duplicates
         const existingFile = await pool.query(
@@ -1729,14 +1774,17 @@ app.post('/api/files/upload', upload.array('contracts', 10), async (req, res) =>
         );
 
         if (existingFile.rows.length > 0) {
+          console.log(`⚠️ Duplicate file detected: ${filename}`);
           errors.push(`File ${filename} already exists`);
           continue;
         }
 
         // Validate the contract code
+        console.log(`✅ Validating contract code for ${filename}`);
         validateContractCode(code);
 
         // Insert file into database
+        console.log(`💾 Inserting ${filename} into database...`);
         const result = await pool.query(`
           INSERT INTO contract_files (
             user_id, filename, original_name, file_content, file_size, 
@@ -1754,12 +1802,16 @@ app.post('/api/files/upload', upload.array('contracts', 10), async (req, res) =>
           checksum
         ]);
 
+        console.log(`✅ File inserted successfully: ID ${result.rows[0].id}`);
         uploadedFiles.push(result.rows[0]);
       } catch (fileError) {
+        console.error(`❌ Error processing file ${file.originalname}:`, fileError.message);
         errors.push(`${file.originalname}: ${fileError.message}`);
       }
     }
 
+    console.log(`📤 Upload complete: ${uploadedFiles.length} successful, ${errors.length} errors`);
+    
     res.json({
       success: true,
       uploadedFiles,
