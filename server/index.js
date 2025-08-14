@@ -1155,8 +1155,9 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('   Session key:', sessionKey);
 
     // Call Shipable AI streaming endpoint with correct multipart/form-data format
+    const shipableSessionKey = sessionData.shipableSessionId || sessionData.shipableSessionKey || sessionKey;
     const payload = {
-      sessionKey: sessionKey,
+      sessionKey: shipableSessionKey,
       messages: [
         {
           role: "user",
@@ -1595,40 +1596,124 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    // Store session for streaming
-    sessions.set(sessionKey, {
-      userId: decodedUser.userId,
-      code: analysisCode,
-      filename: combinedFilename,
-      language,
-      lineCount,
-      scanCost,
-      creditsDeducted: scanCost,
-      selectedFileIds: selectedFileIds || [],
-      createdAt: new Date().toISOString()
-    });
+    // Validate Shipable API configuration
+    if (!SHIPABLE_JWT_TOKEN) {
+      console.error('❌ SHIPABLE_JWT_TOKEN not configured');
+      return res.status(503).json({
+        success: false,
+        error: 'Analysis service not configured'
+      });
+    }
 
-    console.log('✅ Analysis session created:', {
-      sessionKey,
-      userId: decodedUser.userId,
-      language,
-      lineCount,
-      scanCost,
-      filesSelected: selectedFileIds?.length || 0
-    });
+    // Now call Shipable API to create session
+    console.log('🔄 Calling Shipable API...');
+    console.log('🔄 API Base:', SHIPABLE_API_BASE);
+    console.log('🔄 Token present:', !!SHIPABLE_JWT_TOKEN);
 
-    res.json({
-      success: true,
-      sessionKey,
-      language,
-      lineCount,
-      scanCost,
-      creditInfo: {
+    try {
+      const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          source: "website"
+        })
+      });
+
+      console.log('🔄 Shipable API response status:', sessionResponse.status);
+
+      if (!sessionResponse.ok) {
+        // Refund credits on API failure
+        console.log('🔄 Refunding credits due to API failure...');
+        try {
+          await pool.query(`
+            UPDATE users 
+            SET credits_balance = credits_balance + $1,
+                credits_updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+          `, [scanCost, decodedUser.userId]);
+          console.log('✅ Credits refunded successfully');
+        } catch (refundError) {
+          console.error('❌ Failed to refund credits:', refundError);
+        }
+
+        const errorText = await sessionResponse.text();
+        console.error('❌ Shipable session creation failed:', errorText);
+
+        return res.status(503).json({
+          success: false,
+          error: 'Analysis service temporarily unavailable. Credits have been refunded.',
+          refunded: true
+        });
+      }
+
+      const sessionData = await sessionResponse.json();
+      console.log('✅ Shipable session created:', sessionData);
+
+      // Store session for streaming with Shipable session ID
+      sessions.set(sessionKey, {
+        userId: decodedUser.userId,
+        code: analysisCode,
+        filename: combinedFilename,
+        language,
+        lineCount,
+        scanCost,
         creditsDeducted: scanCost,
-        creditsRemaining: updateResult.rows[0].credits_balance
-      },
-      filesAnalyzed: selectedFileIds?.length || 0
-    });
+        selectedFileIds: selectedFileIds || [],
+        createdAt: new Date().toISOString(),
+        shipableSessionId: sessionData.data.id,
+        shipableSessionKey: sessionData.data.sessionKey || sessionKey
+      });
+
+      console.log('✅ Analysis session created:', {
+        sessionKey,
+        userId: decodedUser.userId,
+        language,
+        lineCount,
+        scanCost,
+        filesSelected: selectedFileIds?.length || 0,
+        shipableSessionId: sessionData.data.id
+      });
+
+      res.json({
+        success: true,
+        sessionKey,
+        language,
+        lineCount,
+        scanCost,
+        creditInfo: {
+          creditsDeducted: scanCost,
+          creditsRemaining: updateResult.rows[0].credits_balance
+        },
+        filesAnalyzed: selectedFileIds?.length || 0,
+        shipableSessionId: sessionData.data.id
+      });
+
+    } catch (apiError) {
+      console.error('❌ Shipable API error:', apiError);
+      
+      // Refund credits on API failure
+      try {
+        await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance + $1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `, [scanCost, decodedUser.userId]);
+        console.log('✅ Credits refunded due to API error');
+      } catch (refundError) {
+        console.error('❌ Failed to refund credits:', refundError);
+      }
+
+      return res.status(503).json({
+        success: false,
+        error: 'Analysis service temporarily unavailable. Credits have been refunded.',
+        refunded: true
+      });
+    }
 
   } catch (error) {
     console.error('Analyze endpoint error:', error);
