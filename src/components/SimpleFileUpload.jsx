@@ -64,19 +64,19 @@ const SimpleFileUpload = ({ onSuccess, onClose }) => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 bg-gray-900 text-white">
       {/* Drop Zone */}
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onClick={() => document.getElementById('file-input').click()}
-        className="border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg p-8 text-center cursor-pointer transition-colors"
+        className="border-2 border-dashed border-gray-600 hover:border-blue-400 bg-gray-800/50 hover:bg-gray-700/50 rounded-xl p-8 text-center cursor-pointer transition-all duration-200"
       >
         <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
+        <h3 className="text-lg font-medium text-white mb-2">
           Drop files here or click to browse
         </h3>
-        <p className="text-gray-500 mb-4">
+        <p className="text-gray-300 mb-4">
           Supports: {supportedTypes.join(', ')}
         </p>
         <input
@@ -92,23 +92,23 @@ const SimpleFileUpload = ({ onSuccess, onClose }) => {
       {/* Selected Files */}
       {files.length > 0 && (
         <div className="space-y-3">
-          <h4 className="font-medium text-gray-900">
+          <h4 className="font-medium text-white">
             Selected Files ({files.length})
           </h4>
           {files.map((file, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div key={index} className="flex items-center justify-between p-3 bg-gray-800 border border-gray-700 rounded-lg">
               <div className="flex items-center space-x-3">
-                <File className="w-5 h-5 text-blue-500" />
+                <File className="w-5 h-5 text-blue-400" />
                 <div>
-                  <p className="font-medium">{file.name}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="font-medium text-white">{file.name}</p>
+                  <p className="text-sm text-gray-400">
                     {(file.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => removeFile(index)}
-                className="text-red-500 hover:text-red-700"
+                className="text-red-400 hover:text-red-300 hover:bg-red-900/20 p-1 rounded transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -141,23 +141,23 @@ const SimpleFileUpload = ({ onSuccess, onClose }) => {
       {/* Result */}
       {result && (
         <div className={`p-4 rounded-lg border-l-4 ${
-          result.success ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'
+          result.success ? 'bg-emerald-900/30 border-emerald-400' : 'bg-red-900/30 border-red-400'
         }`}>
           <div className="flex items-center space-x-2">
             {result.success ? (
-              <CheckCircle className="w-5 h-5 text-green-500" />
+              <CheckCircle className="w-5 h-5 text-emerald-400" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-500" />
+              <AlertCircle className="w-5 h-5 text-red-400" />
             )}
-            <p className={`font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
+            <p className={`font-medium ${result.success ? 'text-emerald-300' : 'text-red-300'}`}>
               {result.success ? '✅ Upload Successful!' : '❌ Upload Failed'}
             </p>
           </div>
           {result.error && (
-            <p className="text-red-700 text-sm mt-1">{result.error}</p>
+            <p className="text-red-400 text-sm mt-1">{result.error}</p>
           )}
           {result.success && (
-            <p className="text-green-700 text-sm mt-1">Closing in a moment...</p>
+            <p className="text-emerald-400 text-sm mt-1">Closing in a moment...</p>
           )}
         </div>
       )}

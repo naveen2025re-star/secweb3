@@ -24,9 +24,12 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
     if (isAnalyzing) return
 
     if (inputMode === 'files' && selectedFileIds.length > 0) {
-      // Send with selected file IDs
+      // Send with selected file IDs - backend will retrieve and analyze actual file content
+      const fileCount = selectedFileIds.length
+      const defaultMessage = `Analyze ${fileCount} selected smart contract file${fileCount > 1 ? 's' : ''} for security vulnerabilities`
+      
       onSendMessage(
-        message.trim() || 'Analyze the selected smart contract files for security vulnerabilities', 
+        message.trim() || defaultMessage, 
         null, 
         selectedFileIds
       )
