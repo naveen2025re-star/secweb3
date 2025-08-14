@@ -1779,33 +1779,87 @@ app.post('/api/files/upload', upload.array('contracts', 10), async (req, res) =>
 // Get user's contract files
 app.get('/api/files', async (req, res) => {
   try {
+    console.log('📂 GET /api/files - Request received');
+    
     const authHeader = req.headers['authorization'];
     if (!authHeader) {
+      console.log('❌ No authorization header');
       return res.status(401).json({ success: false, error: 'Access token required' });
     }
 
     const token = authHeader.split(' ')[1];
-    const decodedUser = jwt.verify(token, JWT_TOKEN);
+    if (!token) {
+      console.log('❌ No token in authorization header');
+      return res.status(401).json({ success: false, error: 'Invalid token format' });
+    }
 
-    const files = await pool.query(`
-      SELECT 
-        id, filename, original_name, file_size, language, 
-        upload_date, last_scanned, scan_count, tags, description
-      FROM contract_files 
-      WHERE user_id = $1 AND is_active = true 
-      ORDER BY upload_date DESC
-    `, [decodedUser.userId]);
+    let decodedUser;
+    try {
+      decodedUser = jwt.verify(token, JWT_TOKEN);
+      console.log('✅ Token verified for user:', decodedUser.userId);
+    } catch (jwtError) {
+      console.log('❌ JWT verification failed:', jwtError.message);
+      return res.status(401).json({ success: false, error: 'Invalid token' });
+    }
 
-    res.json({
-      success: true,
-      files: files.rows
-    });
+    // Check if contract_files table exists
+    try {
+      const tableExists = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'contract_files'
+        );
+      `);
+      
+      if (!tableExists.rows[0].exists) {
+        console.log('❌ contract_files table does not exist');
+        return res.json({
+          success: true,
+          files: [], // Return empty array if table doesn't exist yet
+          message: 'No files uploaded yet'
+        });
+      }
+      
+      console.log('✅ contract_files table exists');
+    } catch (tableError) {
+      console.error('❌ Error checking table existence:', tableError);
+      return res.status(500).json({
+        success: false,
+        error: 'Database table check failed'
+      });
+    }
+
+    // Query user files
+    try {
+      const files = await pool.query(`
+        SELECT 
+          id, filename, original_name, file_size, language, 
+          upload_date, last_scanned, scan_count, tags, description
+        FROM contract_files 
+        WHERE user_id = $1 AND is_active = true 
+        ORDER BY upload_date DESC
+      `, [decodedUser.userId]);
+
+      console.log(`✅ Retrieved ${files.rows.length} files for user ${decodedUser.userId}`);
+      
+      res.json({
+        success: true,
+        files: files.rows
+      });
+
+    } catch (queryError) {
+      console.error('❌ Database query error:', queryError);
+      res.status(500).json({
+        success: false,
+        error: 'Database query failed: ' + queryError.message
+      });
+    }
 
   } catch (error) {
-    console.error('Get files error:', error);
+    console.error('❌ Get files endpoint error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve files'
+      error: 'Failed to retrieve files: ' + error.message
     });
   }
 });
@@ -1979,12 +2033,23 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(staticPath, 'index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server with database initialization
+app.listen(PORT, async () => {
   console.log(`🚀 Smart Contract Auditor Backend`);
   console.log(`📡 Server running on port ${PORT}`);
   console.log(`🤖 AI Model: ${process.env.SHIPABLE_MODEL}`);
   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL}`);
   console.log(`📊 Rate Limiting: Disabled`);
+  
+  // Initialize database tables
+  try {
+    console.log('🔄 Initializing database tables...');
+    await createTables();
+    console.log('✅ Database tables initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize database tables:', error);
+    console.error('Server will continue but file upload features may not work');
+  }
+  
   console.log(`⚡ Ready for contract analysis!`);
 });
