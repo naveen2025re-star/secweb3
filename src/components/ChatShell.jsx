@@ -139,8 +139,8 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
     }
   }
 
-  const handleSendMessage = async (message, contractCode = '') => {
-    if (!(message || '').trim() && !(contractCode || '').trim()) return
+  const handleSendMessage = async (message, contractCode = '', selectedFileIds = null) => {
+    if (!(message || '').trim() && !(contractCode || '').trim() && (!selectedFileIds || selectedFileIds.length === 0)) return
     if (analyzing) return
 
     setAnalyzing(true)
@@ -192,9 +192,9 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
 
     try {
       // Step 1: Create session (with credit deduction)
-      // For chat messages, send the message content; for contracts, send the contract code
+      // For file analysis, pass selectedFileIds; for direct code, pass contractCode
       const contentToAnalyze = (contractCode || '').trim() ? contractCode : message
-      const sessionData = await analyzeContract(contentToAnalyze, contractCode ? 'contract.sol' : undefined)
+      const sessionData = await analyzeContract(contentToAnalyze, contractCode ? 'contract.sol' : undefined, selectedFileIds)
 
       if (!sessionData.success) {
         // Remove loading message first
