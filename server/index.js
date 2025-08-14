@@ -452,9 +452,9 @@ app.post('/api/analyze', async (req, res) => {
     const currentUser = userResult.rows[0];
     console.log('✅ User found:', currentUser.id);
 
-    const { code, filename, message } = req.body || {};
+    const { code, filename, message, selectedFileIds } = req.body || {};
     
-    // Accept either 'code' or 'message' field
+    // Accept either 'code', 'message', or 'selectedFileIds'
     const inputContent = code || message || '';
 
     // Validate request body
@@ -466,17 +466,23 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    // Validate input (accept any non-empty content)
-    if (!inputContent || typeof inputContent !== 'string' || inputContent.trim().length === 0) {
+    // Validate input (accept code/message OR selectedFileIds)
+    const hasFileIds = selectedFileIds && Array.isArray(selectedFileIds) && selectedFileIds.length > 0;
+    const hasContent = inputContent && typeof inputContent === 'string' && inputContent.trim().length > 0;
+    
+    if (!hasContent && !hasFileIds) {
       console.warn('❌ Invalid input:', { 
         codeLength: code?.length,
         messageLength: message?.length,
         inputLength: inputContent?.length,
-        inputType: typeof inputContent 
+        inputType: typeof inputContent,
+        fileIds: selectedFileIds,
+        hasFileIds,
+        hasContent
       });
       return res.status(400).json({
         success: false,
-        error: 'Content is required and cannot be empty.'
+        error: 'Content or file selection is required.'
       });
     }
 
