@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Files, Code, ChevronDown, ChevronRight, CheckSquare, Square, 
-  FileText, Calendar, BarChart3, Zap, AlertCircle, Loader 
+  FileText, Calendar, BarChart3, Zap, AlertCircle, Loader, X 
 } from 'lucide-react';
+import FileUpload from './FileUpload';
 
 const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, className = '' }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showUploader, setShowUploader] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({
     recent: true,
     byLanguage: false
@@ -151,7 +153,7 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
             Upload some contract files first to select them for scanning
           </p>
           <button
-            onClick={onClose}
+            onClick={() => setShowUploader(true)}
             className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
             Upload Files
@@ -326,6 +328,35 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
           )}
         </div>
       </div>
+      {/* File Upload Modal */}
+      {showUploader && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Upload Contract Files
+              </h3>
+              <button
+                onClick={() => setShowUploader(false)}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <FileUpload
+              onUploadComplete={(result) => {
+                if (result.success) {
+                  // Refresh the files list
+                  fetchFiles();
+                  // Close the modal
+                  setShowUploader(false);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
