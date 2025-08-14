@@ -29,14 +29,14 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
       const defaultMessage = `Analyze ${fileCount} selected smart contract file${fileCount > 1 ? 's' : ''} for security vulnerabilities`
       
       onSendMessage(
-        message.trim() || defaultMessage, 
+        (message || '').trim() || defaultMessage, 
         null, 
         selectedFileIds
       )
       setSelectedFileIds([])
     } else {
       // Send with direct code
-      onSendMessage(message.trim() || 'Analyze this smart contract for security vulnerabilities', code)
+      onSendMessage((message || '').trim() || 'Analyze this smart contract for security vulnerabilities', code)
       if (code) setCode('')
     }
     

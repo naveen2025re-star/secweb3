@@ -196,7 +196,8 @@ const validateContractCode = (code) => {
     throw new Error('Contract code is required and must be a string');
   }
 
-  if (code.trim().length < 10) {
+  const trimmedCode = (code || '').trim();
+  if (trimmedCode.length < 10) {
     throw new Error('Contract code is too short to analyze');
   }
 

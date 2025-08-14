@@ -140,7 +140,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
   }
 
   const handleSendMessage = async (message, contractCode = '') => {
-    if (!message.trim() && !contractCode.trim()) return
+    if (!(message || '').trim() && !(contractCode || '').trim()) return
     if (analyzing) return
 
     setAnalyzing(true)
@@ -193,7 +193,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
     try {
       // Step 1: Create session (with credit deduction)
       // For chat messages, send the message content; for contracts, send the contract code
-      const contentToAnalyze = contractCode.trim() ? contractCode : message
+      const contentToAnalyze = (contractCode || '').trim() ? contractCode : message
       const sessionData = await analyzeContract(contentToAnalyze, contractCode ? 'contract.sol' : undefined)
 
       if (!sessionData.success) {
@@ -242,7 +242,7 @@ const ChatShell = ({ user, onShowPlans, onDisconnect }) => {
             id: Date.now(),
             type: 'deduction',
             amount: deducted,
-            reason: contractCode.trim() ? 'Contract Analysis' : 'AI Chat',
+            reason: (contractCode || '').trim() ? 'Contract Analysis' : 'AI Chat',
             timestamp: new Date().toISOString(),
             remainingBalance: newBalance
           };
