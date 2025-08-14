@@ -163,14 +163,7 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
             </p>
           </div>
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              console.log('🔵 Upload button clicked - setting showUploader to true');
-              console.log('Current showUploader state:', showUploader);
-              setShowUploader(true);
-              console.log('Should now show uploader modal');
-            }}
+            onClick={() => setShowUploader(true)}
             className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center space-x-2"
           >
             <Files className="w-4 h-4" />
@@ -346,34 +339,13 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
           )}
         </div>
       </div>
-      {/* Debug: Show state changes */}
-      {console.log('🔄 FileSelector render - showUploader:', showUploader)}
-      
-      {/* Simple debug modal without portal */}
+      {/* File Upload Modal - Working version without portal */}
       {showUploader && (
-        <div className="fixed inset-0 bg-red-500 bg-opacity-75 flex items-center justify-center z-[10000] p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md">
-            <h3 className="text-lg font-semibold mb-4">DEBUG: Modal is working!</h3>
-            <p className="mb-4">If you can see this, the state is changing correctly.</p>
-            <button 
-              onClick={() => setShowUploader(false)}
-              className="px-4 py-2 bg-blue-600 text-white rounded"
-            >
-              Close Debug Modal
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* File Upload Modal - Portal to prevent z-index issues */}
-      {false && showUploader && createPortal(
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
           onClick={(e) => {
-            console.log('🎯 Modal backdrop clicked');
             // Close modal only if clicking the backdrop, not the modal content
             if (e.target === e.currentTarget) {
-              console.log('🔴 Closing modal via backdrop click');
               setShowUploader(false);
             }
           }}
@@ -405,8 +377,7 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
               }}
             />
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );
