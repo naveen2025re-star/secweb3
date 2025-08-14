@@ -5,6 +5,55 @@ All notable changes to SecWeb3 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2025-08-14
+
+### Fixed - Multi-File Upload System & Authentication
+- **JWT Token Key Mismatch**: Fixed critical authentication issue where file components used 'authToken' instead of 'secweb3_token'
+  - Updated FileUpload.jsx to use correct localStorage key for JWT tokens
+  - Updated FileSelector.jsx to use correct localStorage key for JWT tokens  
+  - Updated FileManager.jsx to use correct localStorage key for JWT tokens (all 3 instances)
+  - Resolved "jwt malformed" errors in production environment
+  - Fixed 401 Unauthorized errors on `/api/files` endpoint
+
+- **File Upload Modal Integration**: Fixed missing upload functionality in file selection interface
+  - Added missing FileUpload modal rendering logic to FileManager component
+  - Added FileUpload modal integration to FileSelector component
+  - Fixed FileSelector's "Upload Files" button that only closed selector instead of opening upload interface
+  - Implemented proper modal state management with `showUploader` state
+
+- **Production Authentication**: Enhanced JWT verification for Railway deployment
+  - Added multi-secret JWT verification strategy for environment compatibility
+  - Improved JWT handling to try multiple possible secrets (JWT_TOKEN, JWT_SECRET, SHIPABLE_JWT_TOKEN)
+  - Added detailed logging for production authentication debugging
+  - Enhanced error handling for token verification across different deployment environments
+
+### Enhanced - File Upload User Experience  
+- **Complete Upload Flow**: Unified file upload experience across all components
+  - FileSelector's "Upload Files" button now opens functional upload modal
+  - Drag & drop file upload with validation for .sol, .vy, .move, .cairo files
+  - Auto-refresh file list after successful upload
+  - Auto-close modal on upload completion
+  - Proper success/error feedback with upload progress indicators
+
+- **Authentication Robustness**: Improved authentication reliability in production
+  - Flexible JWT secret handling for different deployment environments
+  - Graceful fallback through multiple JWT secrets
+  - Enhanced error reporting for authentication issues
+  - Better compatibility between development and production environments
+
+### Technical Improvements
+- **Error Handling**: Added comprehensive error handling for file upload operations
+- **State Management**: Improved modal state management for upload interfaces
+- **Component Architecture**: Better integration between FileManager, FileSelector, and FileUpload components
+- **Database Migration**: Ensured database tables creation on server startup for production deployments
+- **Production Logging**: Enhanced logging for JWT verification and authentication debugging
+
+### Developer Experience
+- **Debugging**: Added detailed production logs for authentication troubleshooting
+- **Error Messages**: Improved error messages for upload and authentication failures
+- **Code Quality**: Fixed syntax errors and improved component structure
+- **Documentation**: Enhanced code comments for upload flow and authentication logic
+
 ## [2.2.0] - 2025-08-13
 
 ### Added - Enhanced Backend & Frontend Integration
