@@ -18,23 +18,20 @@ const getAuthHeaders = () => {
 // Main contract analysis function - calls backend with credit deduction
 export const analyzeContract = async (code, filename = 'contract.sol', selectedFileIds = null) => {
   try {
-    console.log('🔄 Starting contract analysis...')
+    console.log('🔄 Starting contract analysis with session creation...')
 
-    // Use open playground endpoint for file analysis, regular analyze endpoint for direct code
-    const endpoint = selectedFileIds && selectedFileIds.length > 0 
-      ? '/api/open-playground' 
-      : '/api/analyze';
+    const payload = {
+      code: code || '',
+      filename: filename || 'contract.sol',
+      message: selectedFileIds && selectedFileIds.length > 0 
+        ? `Analyze ${selectedFileIds.length} selected smart contract file${selectedFileIds.length > 1 ? 's' : ''} for security vulnerabilities`
+        : '',
+      selectedFileIds: selectedFileIds || []
+    };
 
-    console.log(`📍 Using endpoint: ${endpoint} for ${selectedFileIds?.length ? 'file analysis' : 'code analysis'}`);
+    console.log(`📍 Creating session via /api/analyze for ${selectedFileIds?.length ? 'file analysis' : 'code analysis'}`);
 
-    const payload = selectedFileIds && selectedFileIds.length > 0
-      ? { 
-          message: `Analyze ${selectedFileIds.length} selected smart contract file${selectedFileIds.length > 1 ? 's' : ''} for security vulnerabilities`,
-          selectedFileIds 
-        }
-      : { code, filename };
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${API_BASE_URL}/api/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
