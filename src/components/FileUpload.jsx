@@ -31,17 +31,14 @@ const FileUpload = ({ onUploadComplete, className = '' }) => {
 
   const handleFiles = (files) => {
     const fileArray = Array.from(files);
-    const validFiles = [];
-    const fileErrors = [];
-
-    fileArray.forEach(file => {
+    const validFiles = fileArray.filter(file => {
       const errors = validateFile(file);
-      if (errors.length > 0) {
-        fileErrors.push({ file: file.name, errors });
-      } else {
-        validFiles.push(file);
-      }
+      return errors.length === 0;
     });
+    const fileErrors = fileArray.filter(file => {
+      const errors = validateFile(file);
+      return errors.length > 0;
+    }).map(file => ({ file: file.name, errors: validateFile(file) }));
 
     // Check total file count
     if (selectedFiles.length + validFiles.length > maxFiles) {

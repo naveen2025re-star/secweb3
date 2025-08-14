@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Send, Paperclip, Mic, X, FileText, AlertCircle, Files, Code, ChevronDown } from 'lucide-react'
 import FileSelector from './FileSelector'
-import FileUpload from './FileUpload'
+import SimpleFileUpload from './SimpleFileUpload'
 
 const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
   const [message, setMessage] = useState('')
@@ -394,16 +394,13 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
               </button>
             </div>
             
-            <FileUpload
-              onUploadComplete={(result) => {
-                if (result.success) {
-                  // Close the modal on successful upload
-                  setShowUploadModal(false);
-                  // Switch to files mode and show the file selector
-                  setInputMode('files');
-                  setShowFileSelector(true);
-                }
+            <SimpleFileUpload
+              onSuccess={(result) => {
+                // Switch to files mode and show the file selector
+                setInputMode('files');
+                setShowFileSelector(true);
               }}
+              onClose={() => setShowUploadModal(false)}
             />
           </div>
         </div>
