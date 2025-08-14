@@ -143,20 +143,30 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
 
   if (files.length === 0) {
     return (
-      <div className={`p-6 ${className}`}>
-        <div className="text-center py-8">
-          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-sm font-medium text-gray-900 mb-2">
-            No contract files uploaded yet
-          </h3>
-          <p className="text-xs text-gray-600 mb-4">
-            Upload some contract files first to select them for scanning
-          </p>
+      <div className={`text-center py-12 ${className}`}>
+        <div className="flex flex-col items-center space-y-6">
+          <div className="relative">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-blue-500/20 backdrop-blur-sm">
+              <Files className="w-10 h-10 text-blue-400" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs font-bold">+</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold text-white">
+              Upload Smart Contracts
+            </h3>
+            <p className="text-sm text-gray-400 max-w-xs">
+              Get started by uploading your contract files. Supports Solidity, Vyper, Move, and Cairo.
+            </p>
+          </div>
           <button
             onClick={() => setShowUploader(true)}
-            className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center space-x-2"
           >
-            Upload Files
+            <Files className="w-4 h-4" />
+            <span>Upload Contract Files</span>
           </button>
         </div>
       </div>
@@ -328,34 +338,43 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
           )}
         </div>
       </div>
-      {/* File Upload Modal */}
+      {/* File Upload Modal - Portal to prevent z-index issues */}
       {showUploader && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-900">
-                Upload Contract Files
-              </h3>
-              <button
-                onClick={() => setShowUploader(false)}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <FileUpload
-              onUploadComplete={(result) => {
-                if (result.success) {
-                  // Refresh the files list
-                  fetchFiles();
-                  // Close the modal
-                  setShowUploader(false);
-                }
-              }}
-            />
-          </div>
-        </div>
+        <>
+          {/* Create portal to document.body to avoid container clipping */}
+          {typeof document !== 'undefined' && 
+            document.getElementById('root') && 
+            require('react-dom').createPortal(
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+                <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      Upload Contract Files
+                    </h3>
+                    <button
+                      onClick={() => setShowUploader(false)}
+                      className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <FileUpload
+                    onUploadComplete={(result) => {
+                      if (result.success) {
+                        // Refresh the files list
+                        fetchFiles();
+                        // Close the modal
+                        setShowUploader(false);
+                      }
+                    }}
+                  />
+                </div>
+              </div>,
+              document.body
+            )
+          }
+        </>
       )}
     </div>
   );

@@ -89,30 +89,30 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
   return (
     <div className="bg-gray-900/95 backdrop-blur-sm border-t border-gray-700/50">
       <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* Mode Toggle */}
+        {/* Mode Toggle - Enhanced ChatGPT Style */}
         <div className="mb-4 flex items-center justify-center">
-          <div className="bg-gray-800/50 rounded-xl p-1 border border-gray-700/50">
+          <div className="bg-gray-800/80 backdrop-blur-sm rounded-2xl p-1 border border-gray-600/30 shadow-lg">
             <button
               onClick={() => setInputMode('code')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+              className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
                 inputMode === 'code'
-                  ? 'bg-white text-gray-900 shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                  ? 'bg-white text-gray-900 shadow-lg transform scale-[1.02]'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/70'
               }`}
             >
               <Code className="w-4 h-4" />
-              <span>Direct Code</span>
+              <span>Paste Code</span>
             </button>
             <button
               onClick={() => setInputMode('files')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+              className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
                 inputMode === 'files'
-                  ? 'bg-white text-gray-900 shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                  ? 'bg-white text-gray-900 shadow-lg transform scale-[1.02]'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/70'
               }`}
             >
               <Files className="w-4 h-4" />
-              <span>Select Files</span>
+              <span>Upload Files</span>
             </button>
           </div>
         </div>
@@ -175,41 +175,53 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
           </div>
         )}
 
-        {/* File Selector Panel */}
+        {/* Enhanced File Selector Panel */}
         {inputMode === 'files' && (
-          <div className="mb-4 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl shadow-xl">
-            <div className="p-4 border-b border-gray-700/50">
+          <div className="mb-4 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-gray-600/30 rounded-2xl shadow-2xl">
+            <div className="p-5 border-b border-gray-600/20">
               <button
                 onClick={() => setShowFileSelector(!showFileSelector)}
-                className="w-full flex items-center justify-between text-left hover:bg-gray-700/30 p-3 rounded-lg transition-all"
+                className="w-full flex items-center justify-between text-left hover:bg-gray-700/40 p-4 rounded-xl transition-all duration-200 group"
               >
-                <div className="flex items-center space-x-3">
-                  <Files className="w-5 h-5 text-blue-400" />
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
+                    <Files className="w-5 h-5 text-blue-400" />
+                  </div>
                   <div>
-                    <span className="text-white font-medium">
+                    <span className="text-white font-semibold text-base">
                       {selectedFileIds.length > 0 
-                        ? `${selectedFileIds.length} Files Selected` 
-                        : 'Select Contract Files'
+                        ? `${selectedFileIds.length} Contract${selectedFileIds.length !== 1 ? 's' : ''} Ready` 
+                        : 'Choose Smart Contracts'
                       }
                     </span>
-                    <div className="text-xs text-gray-400">
-                      Choose from your uploaded contract files
+                    <div className="text-sm text-gray-400 mt-0.5">
+                      {selectedFileIds.length > 0 
+                        ? 'Contracts selected for security analysis' 
+                        : 'Select from uploaded files or upload new ones'
+                      }
                     </div>
                   </div>
                 </div>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${
-                  showFileSelector ? 'transform rotate-180' : ''
-                }`} />
+                <div className="flex items-center space-x-2">
+                  {selectedFileIds.length > 0 && (
+                    <div className="px-3 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full font-medium">
+                      {selectedFileIds.length}
+                    </div>
+                  )}
+                  <ChevronDown className={`w-5 h-5 text-gray-400 transition-all duration-200 ${
+                    showFileSelector ? 'transform rotate-180' : ''
+                  }`} />
+                </div>
               </button>
             </div>
             
             {showFileSelector && (
-              <div className="p-4">
+              <div className="p-5">
                 <FileSelector
                   selectedFileIds={selectedFileIds}
                   onFilesSelected={setSelectedFileIds}
                   onClose={() => setShowFileSelector(false)}
-                  className="bg-gray-900/20 rounded-lg p-3"
+                  className="bg-gray-900/30 rounded-xl p-4 border border-gray-700/30"
                 />
               </div>
             )}

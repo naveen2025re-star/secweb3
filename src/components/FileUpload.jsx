@@ -144,16 +144,14 @@ const FileUpload = ({ onUploadComplete, className = '' }) => {
 
   return (
     <div className={`space-y-6 ${className}`}>
-      {/* Upload Area */}
+      {/* Enhanced Upload Area */}
       <div
         className={`
-          relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
-          transition-all duration-300 ease-in-out
-          ${isDragging
-            ? 'border-blue-400 bg-blue-50/50 scale-105'
-            : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50/50'
+          relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-300
+          ${isDragging 
+            ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-lg transform scale-[1.02]' 
+            : 'border-gray-300 hover:border-blue-400 hover:bg-gradient-to-br hover:from-gray-50 hover:to-blue-50 hover:shadow-md'
           }
-          ${uploading ? 'pointer-events-none opacity-60' : ''}
         `}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -164,25 +162,50 @@ const FileUpload = ({ onUploadComplete, className = '' }) => {
           ref={fileInputRef}
           type="file"
           multiple
-          accept={supportedExtensions.join(',')}
+          accept=".sol,.vy,.move,.cairo"
           onChange={handleFileSelect}
           className="hidden"
         />
         
-        <div className="space-y-4">
-          <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center transition-colors
-            ${isDragging ? 'bg-blue-100' : 'bg-gray-100'}`}>
-            <Upload className={`w-8 h-8 ${isDragging ? 'text-blue-600' : 'text-gray-600'}`} />
+        <div className="space-y-6">
+          <div className={`w-20 h-20 mx-auto rounded-2xl flex items-center justify-center transition-all duration-300 ${
+            isDragging 
+              ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg' 
+              : 'bg-gradient-to-br from-gray-100 to-gray-200 hover:from-blue-100 hover:to-indigo-100'
+          }`}>
+            <Upload className={`w-10 h-10 transition-colors ${
+              isDragging ? 'text-white' : 'text-gray-600 hover:text-blue-600'
+            }`} />
           </div>
           
-          <div>
-            <p className="text-lg font-medium text-gray-900">
-              {isDragging ? 'Drop files here' : 'Upload Contract Files'}
+          <div className="space-y-3">
+            <h3 className={`text-xl font-bold transition-colors ${
+              isDragging ? 'text-blue-700' : 'text-gray-900'
+            }`}>
+              {isDragging ? 'Drop your contracts here' : 'Upload Smart Contracts'}
+            </h3>
+            <p className="text-gray-600 text-base max-w-md mx-auto">
+              {isDragging 
+                ? 'Release to upload your smart contract files' 
+                : 'Drag and drop your contract files here, or click to browse'
+              }
             </p>
-            <p className="text-sm text-gray-600 mt-2">
-              Drag and drop files or click to browse<br />
-              Supports: {supportedExtensions.join(', ')} • Max {maxFiles} files • 5MB each
-            </p>
+            
+            <div className="flex flex-wrap justify-center gap-2 pt-2">
+              {supportedExtensions.map(ext => (
+                <span key={ext} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                  {ext}
+                </span>
+              ))}
+            </div>
+            
+            <div className="text-sm text-gray-500 pt-3 space-y-1">
+              <p className="flex items-center justify-center space-x-4">
+                <span>Max file size: 5MB</span>
+                <span>•</span>
+                <span>Max files: {maxFiles}</span>
+              </p>
+            </div>
           </div>
         </div>
 
