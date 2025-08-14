@@ -1795,11 +1795,42 @@ app.get('/api/files', async (req, res) => {
 
     let decodedUser;
     try {
-      decodedUser = jwt.verify(token, JWT_TOKEN);
-      console.log('✅ Token verified for user:', decodedUser.userId);
+      // Try multiple JWT secrets for compatibility
+      const possibleSecrets = [
+        JWT_TOKEN,
+        process.env.JWT_SECRET,
+        process.env.SHIPABLE_JWT_TOKEN,
+        process.env.VITE_SHIPABLE_JWT_TOKEN,
+        'your-secret-key' // fallback for development
+      ].filter(Boolean);
+      
+      let verificationError;
+      for (const secret of possibleSecrets) {
+        try {
+          decodedUser = jwt.verify(token, secret);
+          console.log('✅ Token verified for user:', decodedUser.userId, 'using secret:', secret.substring(0, 10) + '...');
+          break;
+        } catch (err) {
+          verificationError = err;
+          continue;
+        }
+      }
+      
+      if (!decodedUser) {
+        console.log('❌ JWT verification failed with all secrets:', verificationError.message);
+        console.log('Available environment variables:', Object.keys(process.env).filter(key => 
+          key.includes('JWT') || key.includes('TOKEN') || key.includes('SECRET')
+        ));
+        return res.status(401).json({ 
+          success: false, 
+          error: 'Invalid token',
+          debug: process.env.NODE_ENV !== 'production' ? verificationError.message : undefined
+        });
+      }
+      
     } catch (jwtError) {
-      console.log('❌ JWT verification failed:', jwtError.message);
-      return res.status(401).json({ success: false, error: 'Invalid token' });
+      console.log('❌ JWT verification error:', jwtError.message);
+      return res.status(401).json({ success: false, error: 'Token verification failed' });
     }
 
     // Check if contract_files table exists
