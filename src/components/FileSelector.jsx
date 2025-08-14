@@ -19,7 +19,7 @@ const FileSelector = ({ onFilesSelected, selectedFileIds = [], onClose, classNam
 
   const fetchFiles = async () => {
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('secweb3_token');
       const response = await fetch('/api/files', {
         headers: {
           'Authorization': `Bearer ${token}`,

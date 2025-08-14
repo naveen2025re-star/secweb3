@@ -113,7 +113,7 @@ const FileUpload = ({ onUploadComplete, className = '' }) => {
         formData.append('contracts', file);
       });
 
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('secweb3_token');
       const response = await fetch('/api/files/upload', {
         method: 'POST',
         headers: {

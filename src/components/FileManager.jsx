@@ -22,7 +22,7 @@ const FileManager = ({ onFileSelect, selectedFileIds = [], className = '' }) => 
 
   const fetchFiles = async () => {
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('secweb3_token');
       const response = await fetch('/api/files', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -48,7 +48,7 @@ const FileManager = ({ onFileSelect, selectedFileIds = [], className = '' }) => 
 
   const deleteFile = async (fileId) => {
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('secweb3_token');
       const response = await fetch(`/api/files/${fileId}`, {
         method: 'DELETE',
         headers: {
@@ -70,7 +70,7 @@ const FileManager = ({ onFileSelect, selectedFileIds = [], className = '' }) => 
 
   const updateFileMetadata = async (fileId, metadata) => {
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('secweb3_token');
       const response = await fetch(`/api/files/${fileId}`, {
         method: 'PATCH',
         headers: {
