@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Send, Paperclip, Mic, X, FileText, AlertCircle, Files, Code, ChevronDown } from 'lucide-react'
 import FileSelector from './FileSelector'
+import FileUpload from './FileUpload'
 
 const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
   const [message, setMessage] = useState('')
@@ -9,6 +10,7 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
   const [inputMode, setInputMode] = useState('code') // 'code' or 'files'
   const [selectedFileIds, setSelectedFileIds] = useState([])
   const [showFileSelector, setShowFileSelector] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -104,7 +106,10 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
               <span>Paste Code</span>
             </button>
             <button
-              onClick={() => setInputMode('files')}
+              onClick={() => {
+                setInputMode('files');
+                setShowUploadModal(true);
+              }}
               className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
                 inputMode === 'files'
                   ? 'bg-white text-gray-900 shadow-lg transform scale-[1.02]'
@@ -361,6 +366,48 @@ const ChatInput = ({ onSendMessage, isAnalyzing, code, setCode }) => {
           </div>
         </div>
       </div>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
+          onClick={(e) => {
+            // Close modal only if clicking the backdrop
+            if (e.target === e.currentTarget) {
+              setShowUploadModal(false);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Upload Contract Files
+              </h3>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <FileUpload
+              onUploadComplete={(result) => {
+                if (result.success) {
+                  // Close the modal on successful upload
+                  setShowUploadModal(false);
+                  // Switch to files mode and show the file selector
+                  setInputMode('files');
+                  setShowFileSelector(true);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
