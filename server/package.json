@@ -24,7 +24,11 @@
     "multer": "^1.4.4",
     "pg": "^8.11.3",
     "jsonwebtoken": "^9.0.2",
-    "ethers": "^5.7.2"
+    "ethers": "^5.7.2",
+    "bcrypt": "^5.1.1",
+    "node-fetch": "^3.3.2",
+    "form-data": "^4.0.0",
+    "formdata-node": "^6.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
