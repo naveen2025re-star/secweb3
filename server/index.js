@@ -703,6 +703,7 @@ app.post('/api/analyze', async (req, res) => {
         language: detectContractLanguage(inputContent, filename),
         lineCount: inputContent.split('\n').length,
         shipableSessionId: sessionData.data.id,
+        shipableSessionKey: sessionData.data.key, // Store the actual session key for open-playground API
         createdAt: new Date().toISOString(),
         userId: decodedUser.userId,
         scanCost,
@@ -1157,32 +1158,35 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     // Call Shipable AI streaming endpoint with correct multipart/form-data format
     const shipableSessionKey = sessionData.shipableSessionId || sessionData.shipableSessionKey || sessionKey;
     
-    // Ensure we have a valid Shipable session key
-    if (!sessionData.shipableSessionId) {
-      console.error('❌ No Shipable session ID found in session data');
-      res.write(`data: ${JSON.stringify({ 
-        body: `❌ **Session Error**\n\nNo valid Shipable session found. Please try again.\n\nSession Data: ${JSON.stringify(sessionData, null, 2)}`
-      })}\n\n`);
-      cleanup();
-      res.write('data: [DONE]\n\n');
-      return;
+    // For the sessionKey, we need to use the session key returned from the session creation API
+    // This should be stored in sessionData during session creation
+    let actualSessionKey;
+    if (sessionData.shipableSessionKey) {
+      actualSessionKey = sessionData.shipableSessionKey;
+    } else if (sessionData.shipableSessionId) {
+      actualSessionKey = sessionData.shipableSessionId;
+    } else {
+      // Fallback to the local session key if no Shipable key is stored
+      actualSessionKey = sessionKey;
     }
     
+    console.log('🔑 Using session key for Shipable API:', actualSessionKey);
+    
     const payload = {
-      sessionKey: shipableSessionKey,
+      sessionKey: actualSessionKey,
       messages: [
         {
           role: "user",
           content: analysisPrompt
         }
       ],
-      token: SHIPABLE_JWT_TOKEN,  // Include token in the payload
+      token: SHIPABLE_JWT_TOKEN,
       stream: true
     };
 
     console.log('📦 Streaming payload prepared:');
     console.log('   Local session key:', sessionKey);
-    console.log('   Shipable session key:', shipableSessionKey);
+    console.log('   Actual session key for API:', actualSessionKey);
     console.log('   Messages count:', payload.messages.length);
     console.log('   Message content length:', analysisPrompt.length);
     console.log('   Stream enabled:', payload.stream);
@@ -1191,11 +1195,20 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     // Use proper FormData API for correct multipart/form-data formatting
     const { FormData } = await import('formdata-node');
     const formData = new FormData();
-    formData.append('request', JSON.stringify(payload));
+    
+    // Add each field separately as per Shipable API requirements
+    formData.append('sessionKey', actualSessionKey);
+    formData.append('messages', JSON.stringify(payload.messages));
+    formData.append('token', SHIPABLE_JWT_TOKEN);
+    formData.append('stream', 'true');
 
     console.log('🔄 Calling Shipable API:', `${SHIPABLE_API_BASE}/chat/open-playground`);
     console.log('📦 Using FormData API for multipart/form-data');
-    console.log('📦 Complete payload object:', JSON.stringify(payload, null, 2));
+    console.log('📦 FormData fields:');
+    console.log('   sessionKey:', actualSessionKey);
+    console.log('   messages:', JSON.stringify(payload.messages));
+    console.log('   token:', SHIPABLE_JWT_TOKEN ? `${SHIPABLE_JWT_TOKEN.substring(0, 20)}...` : 'MISSING');
+    console.log('   stream: true');
 
     let response;
     try {
@@ -1294,8 +1307,12 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
         const lines = chunk.split('\n');
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
+          // Skip empty lines properly
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          
+          if (trimmedLine.startsWith('data: ')) {
+            const data = trimmedLine.slice(6).trim();
             if (data && data !== '[DONE]') {
               try {
                 const parsed = JSON.parse(data);
@@ -1313,7 +1330,7 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
             } else if (data === '[DONE]') {
               console.log('🏁 Received [DONE] signal');
               res.write('data: [DONE]\n\n');
-              res.end();
+              cleanup();
               return;
             }
           }
