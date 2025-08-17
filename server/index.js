@@ -1156,6 +1156,18 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
 
     // Call Shipable AI streaming endpoint with correct multipart/form-data format
     const shipableSessionKey = sessionData.shipableSessionId || sessionData.shipableSessionKey || sessionKey;
+    
+    // Ensure we have a valid Shipable session key
+    if (!sessionData.shipableSessionId) {
+      console.error('❌ No Shipable session ID found in session data');
+      res.write(`data: ${JSON.stringify({ 
+        body: `❌ **Session Error**\n\nNo valid Shipable session found. Please try again.\n\nSession Data: ${JSON.stringify(sessionData, null, 2)}`
+      })}\n\n`);
+      cleanup();
+      res.write('data: [DONE]\n\n');
+      return;
+    }
+    
     const payload = {
       sessionKey: shipableSessionKey,
       messages: [
@@ -1169,7 +1181,8 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     };
 
     console.log('📦 Streaming payload prepared:');
-    console.log('   Session key:', sessionKey);
+    console.log('   Local session key:', sessionKey);
+    console.log('   Shipable session key:', shipableSessionKey);
     console.log('   Messages count:', payload.messages.length);
     console.log('   Message content length:', analysisPrompt.length);
     console.log('   Stream enabled:', payload.stream);
@@ -1211,12 +1224,30 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
         status: response.status,
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries()),
-        body: errorText
+        body: errorText,
+        requestPayload: JSON.stringify(payload, null, 2),
+        sessionData: {
+          hasShipableSessionId: !!sessionData.shipableSessionId,
+          shipableSessionId: sessionData.shipableSessionId,
+          localSessionKey: sessionKey,
+          shipableSessionKey: shipableSessionKey
+        }
       });
+
+      // Try to parse error details
+      let errorMessage = `Received ${response.status} error from AI service.`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.message) {
+          errorMessage = `Shipable API Error: ${errorJson.message}`;
+        }
+      } catch (e) {
+        // Use default error message
+      }
 
       // Send error message to client and implement fallback
       res.write(`data: ${JSON.stringify({ 
-        body: `❌ **Analysis Service Error**\n\nReceived ${response.status} error from AI service.\n\n**Fallback Analysis:**\n\nYour contract appears to be a ${sessionData.language} smart contract. Here are some general security considerations:\n\n- **Access Control**: Ensure proper role-based access controls\n- **Input Validation**: Validate all external inputs\n- **Reentrancy Protection**: Use appropriate guards for state changes\n- **Integer Overflow**: Check for arithmetic vulnerabilities\n\nFor detailed analysis, please try again or contact support.`
+        body: `❌ **Analysis Service Error**\n\n${errorMessage}\n\n**Debug Info:**\n- Status: ${response.status}\n- Session ID: ${sessionData.shipableSessionId || 'Missing'}\n- Local Key: ${sessionKey}\n\n**Fallback Analysis:**\n\nYour contract appears to be a ${sessionData.language} smart contract. Here are some general security considerations:\n\n- **Access Control**: Ensure proper role-based access controls\n- **Input Validation**: Validate all external inputs\n- **Reentrancy Protection**: Use appropriate guards for state changes\n- **Integer Overflow**: Check for arithmetic vulnerabilities\n\nFor detailed analysis, please try again or contact support.`
       })}\n\n`);
 
       cleanup();
@@ -1653,6 +1684,17 @@ app.post('/api/analyze', async (req, res) => {
       const sessionData = await sessionResponse.json();
       console.log('✅ Shipable session created:', sessionData);
 
+      // Extract the correct session key from Shipable response
+      const shipableSessionId = sessionData.data?.id;
+      const shipableSessionKey = sessionData.data?.sessionKey || sessionData.data?.session_key || shipableSessionId;
+      
+      console.log('🔑 Session key details:', {
+        localSessionKey: sessionKey,
+        shipableSessionId: shipableSessionId,
+        shipableSessionKey: shipableSessionKey,
+        fullSessionData: sessionData
+      });
+
       // Store session for streaming with Shipable session ID
       sessions.set(sessionKey, {
         userId: decodedUser.userId,
@@ -1664,8 +1706,8 @@ app.post('/api/analyze', async (req, res) => {
         creditsDeducted: scanCost,
         selectedFileIds: selectedFileIds || [],
         createdAt: new Date().toISOString(),
-        shipableSessionId: sessionData.data.id,
-        shipableSessionKey: sessionData.data.sessionKey || sessionKey
+        shipableSessionId: shipableSessionId,
+        shipableSessionKey: shipableSessionKey
       });
 
       console.log('✅ Analysis session created:', {
