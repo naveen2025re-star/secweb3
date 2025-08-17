@@ -618,12 +618,14 @@ app.post('/api/analyze', async (req, res) => {
     if (!SHIPABLE_JWT_TOKEN) {
       console.error('❌ SHIPABLE_JWT_TOKEN not configured');
       // Refund credits since we can't process the analysis
-      await pool.query(`
-        UPDATE users 
-        SET credits_balance = credits_balance + $1,
-            credits_updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `, [scanCost, decoded.userId]);
+      if (isContractAnalysis) {
+        await pool.query(`
+          UPDATE users 
+          SET credits_balance = credits_balance + $1,
+              credits_updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `, [scanCost, decodedUser.userId]);
+      }
 
       return res.status(503).json({
         success: false,
@@ -681,12 +683,14 @@ app.post('/api/analyze', async (req, res) => {
 
       if (!sessionData || sessionData.statusCode !== 201 || !sessionData.data?.key) {
         // Refund credits on invalid response
-        await pool.query(`
-          UPDATE users 
-          SET credits_balance = credits_balance + $1,
-              credits_updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-        `, [scanCost, decoded.userId]);
+        if (isContractAnalysis) {
+          await pool.query(`
+            UPDATE users 
+            SET credits_balance = credits_balance + $1,
+                credits_updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+          `, [scanCost, decodedUser.userId]);
+        }
 
         return res.status(503).json({
           success: false,
@@ -741,7 +745,7 @@ app.post('/api/analyze', async (req, res) => {
               credits_updated_at = CURRENT_TIMESTAMP
           WHERE id = $2
           RETURNING credits_balance
-        `, [scanCost, decoded.userId]);
+        `, [scanCost, decodedUser.userId]);
 
         if (refundResult.rows.length > 0) {
           console.log('✅ Credits refunded successfully. New balance:', refundResult.rows[0].credits_balance);
@@ -1193,12 +1197,11 @@ app.post('/api/analyze/stream/:sessionKey', async (req, res) => {
     console.log('   Using JWT token:', SHIPABLE_JWT_TOKEN ? `${SHIPABLE_JWT_TOKEN.substring(0, 20)}...` : 'MISSING');
 
     // Use proper FormData API for correct multipart/form-data formatting
-    const { FormData } = await import('formdata-node');
     const formData = new FormData();
     
     // Add each field separately as per Shipable API requirements
     formData.append('sessionKey', actualSessionKey);
-    formData.append('messages', JSON.stringify(payload.messages));
+    formData.append('content', analysisCode || message);
     formData.append('token', SHIPABLE_JWT_TOKEN);
     formData.append('stream', 'true');
 
@@ -1495,7 +1498,7 @@ app.get('/api/sessions/:sessionKey', async (req, res) => {
 // Main analyze endpoint supporting both direct code and file selection
 app.post('/api/analyze', async (req, res) => {
   try {
-    const { message, code, selectedFileIds } = req.body;
+    const { message, code, selectedFileIds, filename } = req.body;
     
     // Authenticate user
     const authHeader = req.headers['authorization'];
@@ -1506,8 +1509,8 @@ app.post('/api/analyze', async (req, res) => {
     const token = authHeader.split(' ')[1];
     const decodedUser = jwt.verify(token, JWT_TOKEN);
     
-    let analysisCode = code;
-    let combinedFilename = 'contract.sol';
+    let analysisCode = code || message || '';
+    let combinedFilename = filename || 'contract.sol';
     
     // If file selection mode, retrieve and combine file contents
     if (selectedFileIds && selectedFileIds.length > 0) {
@@ -1565,12 +1568,49 @@ app.post('/api/analyze', async (req, res) => {
       }
     }
 
-    // Detect language from combined code
-    const language = analysisCode ? detectContractLanguage(analysisCode, combinedFilename) : 'unknown';
-    const lineCount = analysisCode ? analysisCode.split('\n').length : 0;
+    // Create Shipable session
+    const sessionResponse = await fetch(`${SHIPABLE_API_BASE}/chat/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SHIPABLE_JWT_TOKEN}`,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ source: "website" })
+    });
 
-    // Generate session key
+    if (!sessionResponse.ok) {
+      const errorText = await sessionResponse.text();
+      console.error('Shipable session creation failed:', errorText);
+      return res.status(503).json({
+        success: false,
+        error: 'Analysis service temporarily unavailable'
+      });
+    }
+
+    const sessionData = await sessionResponse.json();
+    
+    if (!sessionData || sessionData.statusCode !== 201 || !sessionData.data?.key) {
+      return res.status(503).json({
+        success: false,
+        error: 'Invalid response from analysis service'
+      });
+    }
+
+    // Generate local session key
     const sessionKey = crypto.randomBytes(16).toString('hex');
+    
+    // Store session info
+    sessions.set(sessionKey, {
+      code: analysisCode,
+      filename: combinedFilename,
+      language: detectContractLanguage(analysisCode, combinedFilename),
+      lineCount: analysisCode.split('\n').length,
+      shipableSessionId: sessionData.data.id,
+      shipableSessionKey: sessionData.data.key,
+      createdAt: new Date().toISOString(),
+      userId: decodedUser.userId
+    });
     
     // Check user credits and tier
     const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [decodedUser.userId]);
